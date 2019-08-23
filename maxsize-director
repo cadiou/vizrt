@@ -1,0 +1,13 @@
+'190823 bcadiou@videlio-globalservices.com
+'Maxsize Director
+
+dim piMaxwidth = (plugininstance) this.GetFunctionPluginInstance("Maxsize")
+dim dLocator = (director) stage.finddirector("LOCATOR")
+
+sub OnExecPerfield()
+	if dLocator.time = 0 then
+		piMaxwidth.SetParameterDouble("WIDTH_X", 880)
+	else
+		piMaxwidth.SetParameterDouble("WIDTH_X", 725)
+	end if
+end sub
