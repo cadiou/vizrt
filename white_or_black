@@ -1,0 +1,10 @@
+dim r,g,b as double
+
+sub OnExecPerField()
+	this.nextcontainer.material.emission.GetRGB(r, g, b)
+	if (r+g+b) > 1.5 then
+		this.material.emission.SetRGB8(1,1,1)
+	else
+		this.material.emission.SetRGB8(254,254,254)
+	end if
+end sub
