@@ -1,0 +1,23 @@
+dim AsMois as array[string]
+AsMois.size=13
+AsMois[1]="JANVIER"
+AsMois[2]="FÉVRIER"
+AsMois[3]="MARS"
+AsMois[4]="AVRIL"
+AsMois[5]="MAI"
+AsMois[6]="JUIN"
+AsMois[7]="JUILLET"
+AsMois[8]="AOÛT"
+AsMois[9]="SEPTEMBRE"
+AsMois[10]="OCTOBRE"
+AsMois[11]="NOVEMBRE"
+AsMois[12]="DÉCEMBRE"
+
+sub OnExecPerField()
+	this.geometry.text=cstr(GetCurrentTime().DayOfMonth)&" "&AsMois[GetCurrentTime().Month]&" "&cstr(GetCurrentTime().Year)&" "&AddZero(cstr(GetCurrentTime().Hour))&":"&AddZero(cstr(GetCurrentTime().Minute))&":"&AddZero(cstr(GetCurrentTime().Second))
+end sub
+
+function AddZero(sInput as string) as string
+	sInput="0"&sInput	
+	AddZero=sInput.Right(2)
+end function
