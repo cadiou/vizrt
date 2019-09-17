@@ -1,7 +1,7 @@
 <?php
 
 /*
- * 190806 
+ * 190909 
  * CHRONO CONTROL
  * bcadiou@videlio-globalservices.com
  *
@@ -11,7 +11,7 @@ include("HTML.class.php");
 
 $html = new HTML("Chrono Control",-1);
 
-$html->tools();
+# $html->tools();
 
 $key= ( isset($_GET["key"])?urldecode($_GET["key"]):"" );
 	
@@ -24,6 +24,7 @@ if (isset($_POST["server"])) {
 }
 
 $snap="ENGINE ".$server;
+$refresh="yes";
 
 if (isset($_POST["minute"])) {
 	$minute=$_POST["minute"];
@@ -49,18 +50,18 @@ if (isset($_POST['minute'])) {
 	send("CLOCK1 STOP");
 	
 	$snap="PRÊT À PARTIR";
+	$refresh="no";
 	
 }	
 	
 if ($key=="totem_decompte_stop") {
 	$snap="STOP";
 	send("CLOCK1 STOP");
+	$refresh="no";
 }elseif ($key=="totem_decompte_start") {
 	$snap="DÉCOMPTE EN COURS";
 	send("CLOCK1 CONT");
-}elseif ($key=="totem_decompte_get") {
-	$snap="CONTROLE";
-	echo get("CLOCK1*TIME GET");
+	$refresh="yes";
 }
 
 
@@ -91,39 +92,28 @@ function get($command) {
     fclose($fp); // To close the connection
 }
 
-$html->h2("Décompte Totem");
+$html->h2("Décompte");
 
-$html->body("<center class=\"bouton\">".$chrono1."</center><script src=\"get_chrono.js\"></script>");
+# $html->body("<center class=\"bouton\">".$chrono1."</center>");
 
-$html->h2("Commandes");
+$html->body("<iframe id=\"Decompte\"    title=\"Décompte\"    width=\"100%\"   height=\"102\" scrolling=\"no\" frameborder=\"0\"  src=\"chrono-display.php?server=$server&refresh=$refresh\">");
+$html->body("</iframe>");
 
 $html->body("<table class=\"ticket\">");
+$html->body("<tr><td height=10>&nbsp;</td></tr>");
 $html->body("<tr><td>");
 $html->body("<center><a href=?server=$server&key=totem_decompte_start class=\"bouton_cam\">START</a></center>");
 $html->body("</td><td>");
 $html->body("<center><a href=?server=$server&key=totem_decompte_stop class=\"bouton_out\">STOP</a></center>");
-$html->body("</td></tr>");
-$html->body("</table>");
-
-$html->h2("Réglage");
-
-$html->body("<table class=\"ticket\">");
-$html->body("<tr><td>");
-$html->body("<form action=\"?server=$server\" method=\"post\">");
+$html->body("</td><td>");
+$html->body("<center><form action=\"?server=$server\" method=\"post\">");
 $html->body("<input type=\"text\" name=\"minute\" value=\"".$minute."\" size=\"2\"> : <input type=\"text\" name=\"seconde\" value=\"".$seconde."\" size=\"2\">");
 $html->body("<input type=\"submit\" value=\"Initialiser le chrono\" class=\"bouton_ME\">");
-$html->body("</form>");
+$html->body("</form></center>");
 $html->body("</td></tr>");
 $html->body("</table>");
 
-$html->h2("État");
-
-$html->body("<table class=\"ticket\">");
-$html->body("<tr><td>");
-$html->body($snap);
-$html->body("</td></tr>");
-$html->body("</table>");
-
+$html->body("<p class=\"inforow\">".$snap."</p>");
 
 $html->out();
 
