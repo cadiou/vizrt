@@ -1,0 +1,24 @@
+dim dWidth = (double) GetParameterDouble("Width")
+dim dHeight = (double) GetParameterDouble("Height")
+
+sub OnExecPerField()
+	this.scaling.xyz = cVertex(max(min( dWidth / this.GetBoundingBoxDimensions().x , dHeight / this.GetBoundingBoxDimensions().y ) , 0.1 ))
+end sub
+
+sub OnInitParameters()
+	RegisterParameterDouble("Width", "Largeur", 736.28, 1, 1300)
+	RegisterParameterDouble("Height", "Hauteur", 414.00, 1, 1000)
+end sub
+
+sub OnInit()
+	this.scaling.xyz=cvertex(1)
+	dWidth = GetParameterDouble("Width")
+	dHeight = GetParameterDouble("Height")
+end sub
+
+sub OnParameterChanged(parameterName As String)
+	dWidth = GetParameterDouble("Width")
+	dHeight = GetParameterDouble("Height")
+	RegisterPluginVersion(1, 1, 1)
+end sub
+
