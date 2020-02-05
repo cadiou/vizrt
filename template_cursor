@@ -1,0 +1,62 @@
+Sub TrackBar1Change(Sender)
+       TtripletEditor1.XValue = TrackBar1.Position
+End Sub
+
+Sub TrackBar2Change(Sender)
+       TtripletEditor1.YValue = -TrackBar2.Position
+End Sub
+
+Sub TrackBar3Change(Sender)
+        TTripletEditor2.XValue = -TrackBar3.Position/20
+        TTripletEditor2.YValue = -TrackBar3.Position/20
+End Sub
+
+Sub TrackBar4Change(Sender)
+       TtripletEditor3.ZValue = TrackBar4.Position
+End Sub
+
+Sub TTWUniCheckBox3Change(Sender)
+       TTWImageInf2.Visible = TTWUniCheckBox3.PathValue
+End Sub
+
+Sub TWUniComboBox1Change(Sender)
+        a=TWUniComboBox1.ItemIndex
+        Select case a
+                case "0"
+                OMO.Text=0
+                TrackBar1.Position = 0
+                TrackBar2.Position = 0
+                TrackBar3.Position = -20
+                TrackBar4.Position = 0
+                case "1"
+                OMO.Text=1
+                TrackBar1.Position = -342
+                TrackBar2.Position = 0
+                TrackBar3.Position = -20
+                TrackBar4.Position = 0
+                case "2"
+                OMO.Text=2
+                TrackBar1.Position = 342
+                TrackBar2.Position = 0
+                TrackBar3.Position = -20
+                TrackBar4.Position = 0
+                case "3"
+                OMO.Text=3
+                TrackBar1.Position = -123
+                TrackBar2.Position = -192
+                TrackBar3.Position = -20
+                TrackBar4.Position = 0
+        End Select
+End sub
+
+Sub TWUniComboBox2Change(Sender)
+        a=TWUniComboBox2.ItemIndex
+        Select case a
+                case "0"
+                TWUniEdit2.Text=1
+                case "1"
+                TWUniEdit2.Text=0
+                case "2"
+                TWUniEdit2.Text=2
+        End Select
+End sub
