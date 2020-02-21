@@ -1,7 +1,7 @@
 <?php
 
 /*
- * 190103
+ * 200221
  * ENGINE CONTROL
  * bcadiou@videlio-globalservices.com
  *
@@ -199,8 +199,10 @@ if ($key=="take_all_in")
 	$snap=$numero;
 	send("RENDERER*MAIN_LAYER*TREE*\$object\$VR\$model*FUNCTION*ControlGeom*input SET ".$numero);
 }elseif ($key=="snap") {
-	send("1 IMAGE SNAPSHOT snap/".date("ymd-His").($snap==""?"":"-".$snap)." RGB 1920 1080");
-	send("2 IMAGE EXPORT IMAGE*/snap/".date("ymd-His").($snap==""?"":"-".$snap)." \"Z:\Public\Pictures\\".date("ymd-His").($snap==""?"":"-".$snap)."\" png");
+	$aammjjhhmmss=date("ymd-His");
+	send("1 IMAGE SNAPSHOT snap/".$aammjjhhmmss.($snap==""?"":"-".$snap)." RGB 1920 1080");
+	sleep(1);
+	send("2 IMAGE EXPORT IMAGE*/snap/".$aammjjhhmmss.($snap==""?"":"-".$snap)." \"Z:\VIZ\SNAP\\".$aammjjhhmmss.($snap==""?"":"-".$snap)."\" png");
 }elseif ($key=="exec_action") {
 	send("MAIN_SCENE*SCRIPT INVOKE OnExecAction ".$numero);
 	$snap="SCRIPT".$numero;
@@ -250,19 +252,15 @@ echo $snap;
 echo "</td>";
 
 /*
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=take_all_in&snap=$snap class=\"bouton\">LOAD&nbsp;SCENE</a>";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=take_all_out&snap=$snap class=\"bouton\">UNLOAD</a>";
 echo "</td>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "<p></p>";
 echo "</td>";
-
 */
 
 echo "</tr>";
@@ -270,23 +268,18 @@ echo "</tr>";
 echo "<tr>";
 
 /*
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=set-race.php?server=$server target=\"_race\" class=\"bouton\">SET&nbsp;RACE</a>";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=set-time.php?server=$server target=\"_time\" class=\"bouton\">DATE&nbsp;TIME</a>";
 echo "</td>";
-
 echo "<td width=100 width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=exec_action&numero=1&snap=".$snap." class=\"bouton\">SAVE&nbsp;KML</a> ";
 echo "</td>";
-
 echo "<td width=100 width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=exec_action&numero=2&snap=".$snap." class=\"bouton\">SAVE&nbsp;CSV</a> ";
 echo "</td>";
-
 */
 
 echo "<td width=100 height=40 bgcolor=black align=center>";
@@ -294,549 +287,387 @@ echo "<a href=engine-control.php?server=$server&key=snap&snap=".$snap." class=\"
 echo "</td>";
 
 /*
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=write&snap=".$snap." class=\"bouton\">CONTROL WRITE</a> ";
 echo "</td>";
-
-
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=initialize&snap=".$snap." class=\"bouton\">INITIALIZE</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=cleanup&snap=".$snap." class=\"bouton\">CLEANUP</a> ";
 echo "</td>";
-
 echo "<td width=100 width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=exec_action&numero=9&snap=".$snap." class=\"bouton\">DEBUG</a> ";
 echo "</td>";
-
 */
 
 echo "</tr>";
 
 /*
-
 echo "<tr>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=1&snap=".$snap." class=\"bouton_cam\">REMOTE</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=3&snap=".$snap." class=\"bouton_cam\">CAM 3</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=5&snap=".$snap." class=\"bouton_cam\">CAM 5</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=7&snap=".$snap." class=\"bouton_cam\">CAM 7</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=9&snap=".$snap." class=\"bouton_cam\">CAM 9</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=11&snap=".$snap." class=\"bouton_cam\">CAM 11</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=13&snap=".$snap." class=\"bouton_cam\">TRACKS</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=15&snap=".$snap." class=\"bouton_cam\">POINT&nbsp;ZERO</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=2&snap=".$snap." class=\"bouton_cam\">CAM 2</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=4&snap=".$snap." class=\"bouton_cam\">CAM 4</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=6&snap=".$snap." class=\"bouton_cam\">CAM 6</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=8&snap=".$snap." class=\"bouton_cam\">CAM 8</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=10&snap=".$snap." class=\"bouton_cam\">CAM 10</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=12&snap=".$snap." class=\"bouton_cam\">CAM 12</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=14&snap=".$snap." class=\"bouton_cam\">ZENITH</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=camera&numero=16&snap=".$snap." class=\"bouton_cam\">CAM 16</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td colspan=2 rowspan=7 height=40 bgcolor=black align=center>";
 echo "HORSE SPEED";
 echo "</td>";
-
 echo "<td width=100 height=40>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=01&snap=".$snap." class=\"bouton_in\">1 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=01&snap=".$snap." class=\"bouton_out\">1 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=02&snap=".$snap." class=\"bouton_in\">2 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=02&snap=".$snap." class=\"bouton_out\">2 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=03&snap=".$snap." class=\"bouton_in\">3 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=03&snap=".$snap." class=\"bouton_out\">3 OUT</a> ";
 echo "</td>";
-
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=04&snap=".$snap." class=\"bouton_in\">4 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=04&snap=".$snap." class=\"bouton_out\">4 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=05&snap=".$snap." class=\"bouton_in\">5 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=05&snap=".$snap." class=\"bouton_out\">5 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=06&snap=".$snap." class=\"bouton_in\">6 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=06&snap=".$snap." class=\"bouton_out\">6 OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=07&snap=".$snap." class=\"bouton_in\">7 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=07&snap=".$snap." class=\"bouton_out\">7 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=08&snap=".$snap." class=\"bouton_in\">8 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=08&snap=".$snap." class=\"bouton_out\">8 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=09&snap=".$snap." class=\"bouton_in\">9 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=09&snap=".$snap." class=\"bouton_out\">9 OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=10&snap=".$snap." class=\"bouton_in\">10 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=10&snap=".$snap." class=\"bouton_out\">10 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=11&snap=".$snap." class=\"bouton_in\">11 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=11&snap=".$snap." class=\"bouton_out\">11 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=12&snap=".$snap." class=\"bouton_in\">12 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=12&snap=".$snap." class=\"bouton_out\">12 OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=13&snap=".$snap." class=\"bouton_in\">13 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=13&snap=".$snap." class=\"bouton_out\">13 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=14&snap=".$snap." class=\"bouton_in\">14 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=14&snap=".$snap." class=\"bouton_out\">14 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=15&snap=".$snap." class=\"bouton_in\">15 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=15&snap=".$snap." class=\"bouton_out\">15 OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=16&snap=".$snap." class=\"bouton_in\">16 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=16&snap=".$snap." class=\"bouton_out\">16 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=17&snap=".$snap." class=\"bouton_in\">17 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=17&snap=".$snap." class=\"bouton_out\">17 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=18&snap=".$snap." class=\"bouton_in\">18 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=18&snap=".$snap." class=\"bouton_out\">18 OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=19&snap=".$snap." class=\"bouton_in\">19 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=19&snap=".$snap." class=\"bouton_out\">19 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&numero=20&snap=".$snap." class=\"bouton_in\">20 IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&numero=20&snap=".$snap." class=\"bouton_out\">20 OUT</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_in&snap=".$snap." class=\"bouton_in\">ALL&nbsp;IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=horse_speed_out&snap=".$snap." class=\"bouton_out\">ALL&nbsp;OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "LOGO";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=logo_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=logo_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "LEADERS";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=leaders_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=leaders_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "LIVE VIDEO INPUT";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=background&numero=1&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=background&numero=0&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "REFERENCE";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=reference_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=reference_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "SPONSOR";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=sponsor_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=sponsor_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "BACK LAYER";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=viziocode_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=viziocode_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "POINTER";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=pointer_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=pointer_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "CIRCLE ID";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=circle_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=circle_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
-
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "LOCATOR";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=locator_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=locator_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "RUN TIME";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=running_time_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=running_time_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "SIDE STANDINGS";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=side_standings_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=side_standings_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "FINISH";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=standings_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=standings_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "VIRTUAL REALITY";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=vr_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=vr_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "GEO PROGRESS";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=geoprogress_in&snap=".$snap." class=\"bouton_in\">TAKE IN</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=geoprogress_out&snap=".$snap." class=\"bouton_out\">OUT</a> ";
 echo "</td>";
-
 echo "</tr>";
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "RUNNING TIME";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=running_time_start&snap=".$snap." class=\"bouton\">START</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=running_time_stop&snap=".$snap." class=\"bouton\">STOP</a> ";
 echo "</td>";
-
 echo "<td height=40>";
 echo "<a href=engine-control.php?server=$server&key=running_time_reset&snap=".$snap." class=\"bouton\">RESET</a> ";
 echo "</td>";
-
 echo "</tr>";
-
-
-
-
 echo "<tr>";
-
 echo "<td colspan=2 height=40 bgcolor=black align=center>";
 echo "SPLINE";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=exec_action&numero=13&snap=".$snap." class=\"bouton\">START</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=exec_action&numero=16&snap=".$snap." class=\"bouton\">STOP</a> ";
 echo "</td>";
-
 echo "<td width=100 height=40 bgcolor=black align=center>";
 echo "<a href=engine-control.php?server=$server&key=exec_action&numero=16&snap=".$snap." class=\"bouton\">RESET</a> ";
 echo "</td>";
-
 echo "</tr>";
-
-
 */
 
 echo "</table>";
