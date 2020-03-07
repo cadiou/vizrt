@@ -200,9 +200,9 @@ if ($key=="take_all_in")
 	send("RENDERER*MAIN_LAYER*TREE*\$object\$VR\$model*FUNCTION*ControlGeom*input SET ".$numero);
 }elseif ($key=="snap") {
 	$aammjjhhmmss=date("ymd-His");
-	send("1 IMAGE SNAPSHOT snap/".$aammjjhhmmss.($snap==""?"":"-".$snap)." RGB 1920 1080");
+	send("IMAGE SNAPSHOT snap/".$aammjjhhmmss.($snap==""?"":"-".$snap)." RGB 1920 1080");
 	sleep(1);
-	send("2 IMAGE EXPORT IMAGE*/snap/".$aammjjhhmmss.($snap==""?"":"-".$snap)." \"Z:\VIZ\SNAP\\".$aammjjhhmmss.($snap==""?"":"-".$snap)."\" png");
+	send("IMAGE EXPORT IMAGE*/snap/".$aammjjhhmmss.($snap==""?"":"-".$snap)." \"Z:\Public\Pictures\\".$aammjjhhmmss.($snap==""?"":"-".$snap)."\" png");
 }elseif ($key=="exec_action") {
 	send("MAIN_SCENE*SCRIPT INVOKE OnExecAction ".$numero);
 	$snap="SCRIPT".$numero;
@@ -214,6 +214,7 @@ if ($key=="take_all_in")
 
 
 function send($command) {
+	echo $command;
 	global $server;
 		$fp = fsockopen($server, 6100, $errno, $errstr, 30);
     if (!$fp) {
