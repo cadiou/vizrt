@@ -1,0 +1,284 @@
+'''''''''''''''''''''''''
+' Hippodrome AR
+' 170923 bc@ViZioCode.com
+
+structure Line
+	line        as string ' Line_id (01-20)
+	id 	      	 as string ' Sensor_id (01-99)	
+	horse_name  as string ' Horse Name
+	jockey_name as string ' Jockey Name
+end structure
+
+dim AlRunner as array[Line]
+dim dPi            = (double) 3.14159265359																		' Pi
+dim dR             = (double) 637100900																		' Earth radius (cm)
+dim cVR            = (container) scene.findcontainer("object$VR$model")	' Model object
+dim AiLine as array[integer]																		' Line [SensorID]
+dim dTimeOrigin as double																		' Time of start (seconds)
+dim AsSpline as array[string]																		' Spline storage values
+dim ApiSpline as array[plugininstance]																		' Spline [LineID]			
+dim AcPointer as array[container]
+dim vWorldOrigin = (vertex) system.Map["WorldOrigin"]
+dim vModelOrigin = (vertex) system.Map["ModelOrigin"]
+dim bSpline,bRealTime as boolean
+dim AvLastVertex as array[vertex]
+dim AAvSpaceTime as array[array[vertex]]
+AAvSpaceTime.size=20
+
+sub OnInitParameters()
+	RegisterParameterBool("spline","Spline",false)
+	RegisterParameterBool("realtime","vizcommunication.map.RegisterChangedCallback",true)
+	RegisterPushButton("init", "Initialize", 8)
+	RegisterPushButton("splinestart", "Spline Start", 13)	
+	RegisterPushButton("splinestop", "Spline Stop", 16)	
+	RegisterPushButton("debug", "Debug", 9)
+end sub
+
+sub OnInit()
+	dim iSensor_id as integer
+	dim cLine = (container) scene.findcontainer("control$line").firstchildcontainer
+	dim cSpline = (container) scene.findcontainer("object$spline")
+	dim cPointer = (container) scene.findcontainer("object$pointer")																				           ' Pointeurs Chevaux
+	dim cBubble = (container) scene.findcontainer("object$bubble")																				           ' Pointeurs Chevaux
+	dim gTmp as geometry
+	dim lTmp as Line
+	bSpline=GetParameterBool("spline")
+	bRealTime=GetParameterBool("realtime")
+	vWorldOrigin   = system.Map["WorldOrigin"]
+	vModelOrigin   = system.Map["ModelOrigin"]
+	system.frontscene.CurrentCameraIndex=16
+	dim cTmp = cPointer.firstchildcontainer
+	do while cTmp<>NULL 
+		cTmp.findsubcontainer("tracker").position.y=system.Map["TrackerHeight"]
+		cTmp.findsubcontainer("marker").position.y=system.Map["TrackerHeight"]
+		cTmp=cTmp.nextcontainer
+	loop
+	cTmp = cSpline.firstchildcontainer
+	do while cTmp<>NULL 
+		cTmp.findsubcontainer("tracker").position.y=system.Map["TrackerHeight"]
+		cTmp=cTmp.nextcontainer
+	loop
+	scene.findcontainer("object$spline").position.y=system.Map["TrackerHeight"]
+	cVR.position.y = vWorldOrigin.y - vModelOrigin.y
+	if vModelOrigin.x < vWorldOrigin.x then
+		cVR.position.X=-Distance(vWorldOrigin.z,vWorldOrigin.x,vWorldOrigin.z,vModelOrigin.x) 
+	else
+		cVR.position.X= Distance(vWorldOrigin.z,vWorldOrigin.x,vWorldOrigin.z,vModelOrigin.x)
+	end if
+	if vModelOrigin.z  > vWorldOrigin.z then
+		cVR.position.Z=-Distance(vWorldOrigin.z,vWorldOrigin.x,vModelOrigin.z,vWorldOrigin.x)
+	else
+		cVR.position.Z= Distance(vWorldOrigin.z,vWorldOrigin.x,vModelOrigin.z,vWorldOrigin.x)
+	end if
+	AiLine.clear
+	for i=0 to 99
+		vizcommunication.map.UnRegisterChangedCallback("Sensor_"&ZeroLead(cstr(i)))
+		AiLine.push(-1)
+	next
+	AAvSpaceTime.clear
+	AAvSpaceTime.size=20
+	for i=0 to system.map["TimeShift"]
+		for j=0 to 19
+			AAvSpaceTime[j].push(cvertex(0))
+		next
+	next
+	
+	AvLastVertex.clear
+	for j=0 to 19
+			AvLastVertex.push(cvertex(0))
+	next
+	
+	ApiSpline.clear
+	AsSpline.clear
+    AcPointer.clear
+	AlRunner.clear
+	AvLastVertex.clear
+	do while  cLine <> NULL
+		gTmp=cLine.findsubcontainer("sensor_id").geometry
+		gTmp.RegisterTextChangedCallback()
+		isensor_id=cint(gTmp.text)
+		lTmp.id  =cLine.findsubcontainer("sensor_id").geometry.text
+		lTmp.horse_name=cLine.findsubcontainer("horse_name").geometry.text
+		lTmp.jockey_name=cLine.findsubcontainer("jockey_name").geometry.text
+		lTmp.line=cLine.name
+		AlRunner.push(lTmp)
+		ApiSpline.push(cSpline.findsubcontainer(cLine.name).GetGeometryPluginInstance() )
+		ApiSpline[ApiSpline.ubound].PushButton("ClearStorage")
+		AsSpline.push("")
+		AvLastVertex.push(cvertex(0))
+		AcPointer.push(cPointer.findsubcontainer(cLine.name))	
+		if iSensor_id > 0 then
+			AiLine[iSensor_id]=cint(cLine.name)
+			if bRealtime then
+				vizcommunication.map.RegisterChangedCallback("Sensor_"&ZeroLead(cstr(iSensor_id)))
+			end if
+			AcPointer[AiLine[iSensor_id]-1].active=true
+		else
+			AcPointer[cint(cLine.name)-1].active=false
+		end if
+		cLine=cLine.NextContainer
+	loop
+	system.map["Runner"]=AlRunner
+	ResetChrono()
+	stage.finddirector("Loop").continueanimation()
+end sub
+
+sub OnExecAction(buttonId As Integer)
+	dim sTmp as string
+	dim AsLine,AsItem as array[string]
+	select case buttonId
+		case 8
+			OnInit()
+			SendCommand("FRONT_SCENE*SCRIPT INVOKE OnInit")
+		case 9
+			Debug()
+		case 13
+			for i=0 to ApiSpline.ubound
+				ApiSpline[i].SetParameterString("Storage",AsSpline[i])
+			next
+			stage.finddirector("Spline").StartAnimation()
+		case 16
+			stage.finddirector("Spline").StopAnimation()
+	end select
+end sub
+
+sub OnGeometryChanged(geom As Geometry)
+end sub
+
+sub OnSharedMemoryVariableChanged(map As SharedMemory, mapKey As String)
+	if mapkey.left(7) = "Sensor_" then
+		HorsePosition(map[mapKey])
+	end if	
+end sub
+
+Sub HorsePosition(sTmp as string)
+	dim AsTrame as array[string]		
+	dim dLatitude, dLongitude, dX,dY,dZ,dT as double
+	dim iSensorID as integer
+	sTmp.split(",",AsTrame)	
+	if AsTrame.size>1 then
+		dT         = cdbl(AsTrame[0])
+		iSensorID  = cint(AsTrame[1]) 
+		dLatitude  = cdbl(AsTrame[2])
+		dLongitude = cdbl(AsTrame[3])
+		if dT > 1 then
+			if dTimeOrigin=0 then
+				dTimeOrigin=dT
+			end if
+			if dT-dTimeOrigin > system.map["RunningTime"] then
+				system.map["RunningTime"]=dT-dTimeOrigin
+			end if
+		end if
+	    if AiLine[cint(AsTrame[1])] <> -1 then
+			if dLongitude < vWorldOrigin.x then
+				dX=-Distance(vWorldOrigin.z,vWorldOrigin.x,vWorldOrigin.z,dLongitude) 
+			else
+				dX= Distance(vWorldOrigin.z,vWorldOrigin.x,vWorldOrigin.z,dLongitude)
+			end if
+			dY=vWorldOrigin.y
+			if dLatitude > vWorldOrigin.z then
+				dZ=-Distance(vWorldOrigin.z,vWorldOrigin.x,dLatitude,vWorldOrigin.x)
+			else
+				dZ= Distance(vWorldOrigin.z,vWorldOrigin.x,dLatitude,vWorldOrigin.x)
+			end if
+			AvLastVertex[AiLine[iSensorID]-1]=cVertex(dX,dY,dZ)
+		'	AcPointer[AiLine[iSensorID]-1].position.xyz=cVertex(dX,dY,dZ)
+			if bSpline and (dt-dtimeorigin)>=0 then
+				AsSpline[ AiLine[iSensorID]-1]&=cstr(cint(dx))&" "&cstr(cint(dy))&" "&cstr(cint(dz))&" "&cstr(cint((dt-dtimeorigin)*25))&" #"
+			end if
+	    end if
+	end if
+End sub
+
+sub ResetChrono()
+	dTimeOrigin=0
+	system.map["RunningTime"]=0
+	for i=0 to ApiSpline.ubound
+		ApiSpline[i].PushButton("ClearStorage")
+	next
+	stage.finddirector("Spline").stopanimation()
+	stage.finddirector("Spline").time=0
+end sub
+
+function convertRad(input as double) as double
+    convertRad = (dPi * input)/180
+end function
+
+function Distance(lat_a_degre as double, lon_a_degre as double, lat_b_degre as double, lon_b_degre as double) as double
+ dim lat_a = (double) convertRad(lat_a_degre)
+ dim lon_a = (double) convertRad(lon_a_degre)
+ dim lat_b = (double) convertRad(lat_b_degre)
+ dim lon_b = (double) convertRad(lon_b_degre)
+ Distance = dR * (dPI/2 - asin( sin(lat_b) * sin(lat_a) + cos(lon_b - lon_a) * cos(lat_b) * cos(lat_a)))
+end function
+
+function ZeroLead(sX as string) as string
+	if sX.length=1 then sX="0"&sX
+	ZeroLead=sX
+end function
+
+sub Debug()
+	dim sTmp as string
+	println "##################################################################"
+	println "system.map[\"RaceNumber\"] ......... : "&system.map["RaceNumber"]
+	println "system.map[\"VenueName\"] .......... : "&system.map["VenueName"]
+	println "system.map[\"CurrentDate\"] ........ : "&system.map["CurrentDate"]
+	println "system.map[\"WorldOrigin\"] ........ : "&system.map["WorldOrigin"]
+	println "system.map[\"ModelOrigin\"] ........ : "&system.map["ModelOrigin"]
+	println "system.map[\"WeatherID\"] .......... : "&system.map["WeatherID"]
+	println "system.map[\"TrackerHeight\"] ...... : "&system.map["TrackerHeight"]
+	println "system.map[\"LensFactor\"] ......... : "&system.map["LensFactor"]
+	println "system.map[\"TimeShift\"] .......... : "&system.map["TimeShift"]
+	println "system.map[\"Runner\"] ............. : "&system.map["Runner"]
+	println "system.map[\"RunningTime\"] ........ : "&system.map["RunningTime"]
+	println "system.map[\"Progress\"] ........... : "&system.map["Progress"]
+	println "AAvSpaceTime[0].size ............. : "&cstr(AAvSpaceTime[0].size)
+	println "AAvSpaceTime[0][0] ............... : "&cstr(AAvSpaceTime[0][0])
+	println "AAvSpaceTime[0][ubound] .......... : "&cstr(AAvSpaceTime[0][AAvSpaceTime[0].ubound])
+	println "#VZC,Sensor_id,Latitude,Longitude"	
+	for i=0 to AlRunner.ubound
+		if cint(AlRunner[i].id)>0 then
+			sTmp=VizCommunication.map["Sensor_"&ZeroLead(AlRunner[i].id)]
+		'	sTmp.Substitute("$2C", ";", true)
+			println ZeroLead(cstr(i+1))&":"&sTmp
+		end if
+	next
+	println "##################################################################"
+end sub
+
+sub OnExecPerField()
+	dim vDelta as vertex
+	dim iLevel as integer
+	if not bRealTime then
+		for i=0 to AlRunner.ubound
+			if cint(AlRunner[i].id)>0 then
+				HorsePosition(VizCommunication.map["Sensor_"&ZeroLead(AlRunner[i].id)])
+			end if
+		next
+	end if
+	for i=AcPointer.ubound to 0 step -1
+	
+		AcPointer[i].position.xyz=AAvSpaceTime[i][AAvSpaceTime[i].ubound]
+
+		for  j=AAvSpaceTime[i].ubound to 1 step -1
+				AAvSpaceTime[i][j]=AAvSpaceTime[i][j-1]
+		next
+	
+		AAvSpaceTime[i][0]=(AvLastVertex[i])		
+	
+		if not(AAvSpaceTime[i][0]==AAvSpaceTime[i][1]) then
+			for j = 2 to AAvSpaceTime[i].ubound
+				iLevel = j-1
+				if not(AAvSpaceTime[i][j]==AAvSpaceTime[i][1]) then
+					exit for
+				end if
+			next
+			vDelta=AAvSpaceTime[i][iLevel]-AAvSpaceTime[i][0]
+	 		for  j=1 to iLevel
+				AAvSpaceTime[i][j]=AAvSpaceTime[i][0]+vdelta*(cdbl(j)/cdbl(iLevel))
+	 		next
+		end if	
+		
+	next
+end sub
+
