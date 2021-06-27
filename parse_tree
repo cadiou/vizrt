@@ -1,0 +1,33 @@
+dim sTreeText as string
+dim iRecursion as integer
+dim AsPath as array[string]
+
+AsPath.size=23
+
+sub OnInitParameters()
+	RegisterParameterString("myfile","Path","d://ViZioCode/SwissTiming/Tree/",80,80,"")
+	RegisterPushButton("exec", 	"Execute", 					  0)	
+end sub
+	
+sub OnExecAction(iButtonId As Integer)
+	println "**** TreeText ****"
+	parse(NextContainer)
+	println sTreeText
+	system.SaveTextFile(GetParameterString("myfile")&scene.name&".txt",sTreeText)
+end sub
+
+sub parse(cContainer as container)
+	dim sLine as string
+	iRecursion++
+	do while cContainer <> null
+		AsPath[iRecursion]=cContainer.name
+		sLine=""
+		for i=1 to iRecursion
+			sLine&="$"&AsPath[i]
+		next
+		sTreeText&= sLine&"\n"
+		parse(cContainer.FirstChildContainer)
+		cContainer=cContainer.nextcontainer		
+	loop
+	iRecursion--
+end sub
