@@ -1,0 +1,36 @@
+dim drag_active as boolean=false
+dim movethecube = (container) scene.FindContainer("movethecube")
+
+sub OnButtonDown6DOF(button As Integer, pos As Vertex, rot As Vertex)
+	if this.containsmousecursor() then
+		drag_active=true
+	end if
+
+end sub
+
+sub OnButtonUp6DOF(button As Integer, pos As Vertex, rot As Vertex)
+	drag_active=false
+end sub
+
+sub OnMoveRelative6DOF(button As Integer, pos As Vertex, rot As Vertex)
+	if 	drag_active=true then
+		this.position.xyz+=pos
+		this.rotation.xyz+=rot
+		' this.position.x=0
+		'this.position.z=0
+	end if
+end sub
+
+Sub OnScale6DOF(button As Integer, scale As Vertex)
+	if 	drag_active=true then
+		this.scaling.xyz+=scale
+	end if
+end sub
+
+sub OnEnter()
+end sub
+
+sub onexecperfield()
+	movethecube.active=not(drag_active)
+
+end sub
