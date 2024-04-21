@@ -1,0 +1,9 @@
+dim cTheme = scene.findcontainer("ouest$THEME")
+
+sub OnInit()
+	cTheme.geometry.RegisterTextChangedCallback
+end sub
+
+sub OnGeometryChanged(geom As Geometry)
+	this.geometry.text = geom.text
+end sub
