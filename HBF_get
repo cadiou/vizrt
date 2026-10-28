@@ -1,7 +1,7 @@
 ' Hub Bourse et Finance
 ' GetHBF{Notation_id}
 ' 
-' 260915 baptiste.cadiou@bfmbusiness.fr
+' 261004 baptiste.cadiou@bfmbusiness.fr
 '
 '
 ' IMPORTANT :
@@ -36,13 +36,13 @@
 '   et pilote seulement this.active selon l'existence du fichier
 '
 ' - prices.latest_price :
-'   si format_numerique = ,00 ou ,0000, applique seulement le format numérique
+'   si format_numerique = ,00 ou ,0000, applique le format numérique et le paramètre Suffix
 '
 ' - prices.latest_performance_intraday_absolute :
-'   si format_numerique = ,00 ou ,0000, applique seulement le format numérique
+'   si format_numerique = ,00 ou ,0000, applique le format numérique et le paramètre Suffix
 '
 ' - prices.latest_performance_intraday_relative :
-'   si format_numerique = ,00 ou ,0000, multiplie par 100 et ajoute " %"
+'   si format_numerique = ,00 ou ,0000, multiplie par 100 et ajoute le paramètre Suffix
 '
 ' - format_numerique = majuscule :
 '   met la sortie texte en majuscules, sauf champ Logo
@@ -143,6 +143,8 @@ sub OnInitParameters()
 	' Format appliqué seulement aux champs numériques marqués comme formatables.
 	RegisterParameterDropDown("format_numerique", "Format", 0, AFormatLabels, 18, 5)
 
+	RegisterParameterString("Suffix", "Suffix", "€", 20, 50, "")
+
 	' Méthode de sortie.
 	RegisterParameterDropDown("output", "Sortie", 0, AOutputLabels, 24, 5)
 	
@@ -202,6 +204,10 @@ sub OnParameterChanged(parameterName As String)
 		OutputSelectedValue()
 
 	elseif parameterName = "format_numerique" then
+
+		OutputSelectedValue()
+
+	elseif parameterName = "Suffix" then
 
 		OutputSelectedValue()
 
@@ -679,6 +685,15 @@ End Function
 ' SORTIE GEOMETRY TEXT
 ' ---------------------------------------------------------------------
 
+' Suffixe commun aux sorties texte et Advanced_Counter.
+' Utilisé tel que saisi, espaces compris ; une chaîne vide désactive le suffixe.
+Function GetOutputSuffix() as String
+
+	GetOutputSuffix = GetParameterString("Suffix")
+
+End Function
+
+
 Sub OutputSelectedValueToGeometryText()
 
 	dim sValue as String
@@ -772,7 +787,7 @@ Sub OutputSelectedValueToAdvancedCounter()
 	sClean = NormalizeDecimalString(sRawValue)
 	dVal = (Double) sClean
 
-	sSuffix = ""
+	sSuffix = GetOutputSuffix()
 
 	iFieldFormat = GetSelectedFieldFormat()
 
@@ -782,23 +797,20 @@ Sub OutputSelectedValueToAdvancedCounter()
 	'
 	' prices.latest_performance_intraday_relative
 	'
-	' - format exact : valeur brute, pas de %
-	' - format ,00 ou ,0000 : x100 + suffixe " %"
+	' - format exact : valeur brute avec le paramètre Suffix
+	' - format ,00 ou ,0000 : x100 + paramètre Suffix
 	' ---------------------------------------------------------
 
 	if iFieldFormat = 2 then
 
 		if IsDecimalFormatSelected() then
 			dVal = dVal * 100.0
-			sSuffix = " %"
 		end if
 
 	end if
 
 
-	' Plus aucun suffixe valueUnit.editorialName.
-	' latest_price et latest_performance_intraday_absolute
-	' restent de simples valeurs numériques formatées.
+	' Le paramètre Suffix est transmis au mask Advanced_Counter.
 
 	PushNumberToCtn(this, dVal, sSuffix)
 
@@ -891,9 +903,18 @@ Function GetSelectedValue() as String
 	elseif AFieldFormat[iSelected] = 2 then
 
 		' Performance relative :
-		' garde la logique x100 + " %" uniquement pour ,00 / ,0000.
+		' garde la conversion x100 uniquement pour ,00 / ,0000.
 		sValue = FormatNumericPercentValue(sValue)
 
+	end if
+
+	' Suffixe uniquement pour les valeurs numériques aux formats ,00 / ,0000.
+	if IsDecimalFormatSelected() then
+		if AFieldFormat[iSelected] = 1 or AFieldFormat[iSelected] = 2 then
+			if IsNumericText(sValue) then
+				sValue = sValue & GetOutputSuffix()
+			end if
+		end if
 	end if
 
 	' Format texte : majuscules / minuscules.
@@ -1737,7 +1758,7 @@ Function FormatNumericPercentValue(sIn as String) as String
 
 	sPercent = "" & v
 
-	FormatNumericPercentValue = FormatNumericValue(sPercent) & " %"
+	FormatNumericPercentValue = FormatNumericValue(sPercent)
 
 End Function
 
@@ -1915,18 +1936,3 @@ Function IsDigitChar(c as String) as Boolean
 	end if
 
 End Function
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
