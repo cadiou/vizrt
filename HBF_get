@@ -1,0 +1,1932 @@
+' Hub Bourse et Finance
+' GetHBF{Notation_id}
+' 
+' 260915 baptiste.cadiou@bfmbusiness.fr
+'
+'
+' IMPORTANT :
+' - notation_id est lu par défaut depuis le paramètre String "IdNotation"
+' - si un container est renseigné dans le paramètre "notation_id_container",
+'   alors ce container devient prioritaire
+' - dans ce cas, notation_id est lu depuis la Geometry texte du container
+'
+' SORTIE :
+' - output = geometry text :
+'   la valeur choisie est écrite dans geometry.text du container courant
+'
+' - output = advanced counter :
+'   la valeur numérique choisie est envoyée au plugin Advanced_Counter
+'   du container courant
+'
+' - output = Omo :
+'   uniquement pour les variations intraday relative et absolute
+'   envoie vis_con = 0, 1 ou 2 au plugin Omo selon le signe
+'
+' - output = active :
+'   pour tous les champs sauf Logo : active le container si la valeur est non nulle
+'   pour Logo : active le container si le fichier logo existe
+'
+' - output = non active :
+'   logique inverse de output = active
+'
+' - champ = Logo :
+'   en sortie normale, crée la texture logo si le fichier existe,
+'   sinon charge une texture vide avec CreateTexture("")
+'   en sortie active/non active, ne touche pas à la texture
+'   et pilote seulement this.active selon l'existence du fichier
+'
+' - prices.latest_price :
+'   si format_numerique = ,00 ou ,0000, applique seulement le format numérique
+'
+' - prices.latest_performance_intraday_absolute :
+'   si format_numerique = ,00 ou ,0000, applique seulement le format numérique
+'
+' - prices.latest_performance_intraday_relative :
+'   si format_numerique = ,00 ou ,0000, multiplie par 100 et ajoute " %"
+'
+' - format_numerique = majuscule :
+'   met la sortie texte en majuscules, sauf champ Logo
+'
+' - format_numerique = minuscules :
+'   met la sortie texte en minuscules, sauf champ Logo
+'
+' - poser ce script sur un container qui possède une Geometry texte,
+'   un plugin Advanced_Counter, un plugin Omo ou une texture selon le mode choisi
+
+
+' ---------------------------------------------------------------------
+' INPUT NOTATION_ID
+' ---------------------------------------------------------------------
+
+dim gNotation_id as geometry
+dim bUseNotationContainer as boolean
+
+
+' ---------------------------------------------------------------------
+' TABLEAUX DE DONNÉES
+' ---------------------------------------------------------------------
+
+dim AsCurrency, AsInstrument, AsMarket, AsNotation, AsPricesGet, AsValueUnit as array[array[string]]
+dim sNotationEnCours as string
+
+
+' ---------------------------------------------------------------------
+' TABLE DE CORRESPONDANCE MENU -> DONNÉE
+'
+' AFieldLabels : texte affiché dans le menu
+' AFieldTables : source de données : prices, notation, valueUnit, currency, market, instrument
+' AFieldRows   : ligne du tableau
+' AFieldCols   : colonne du tableau
+' ---------------------------------------------------------------------
+
+dim AFieldLabels as array[string]
+dim AFieldTables as array[string]
+dim AFieldRows   as array[integer]
+dim AFieldCols   as array[integer]
+
+'AFieldFormat vaudra :
+'
+'0 = champ non concerné
+'1 = champ concerné par le format numérique
+'2 = champ pourcentage, avec multiplication par 100 si format ,00 ou ,0000
+
+dim AFieldFormat as array[integer]
+dim AFormatLabels as array[string]
+
+
+' ---------------------------------------------------------------------
+' OUTPUT
+'
+' 0 = geometry text
+' 1 = advanced counter
+' 2 = Omo
+' 3 = active
+' 4 = non active
+' ---------------------------------------------------------------------
+
+dim AOutputLabels as array[string]
+
+
+' Chemin logo
+Dim PathLogo as string = "//rmc.local//donnees//BFMTVVIZ//_NX_CHANNELS//_Channels_Data//B02_BfmBu//Bourses//Logos//Centre//"
+
+' Chemin Logo de developpement -- a supprimer en prod
+if system.hostname = "EUCLID" then
+	PathLogo = "//quillen//bc//HBF//logo_notation_id//"
+end if
+
+
+
+' ---------------------------------------------------------------------
+' PARAMÈTRES UTILISATEUR
+' ---------------------------------------------------------------------
+
+sub OnInitParameters()
+
+	' Méthode alternative : container texte contenant notation_id.
+	' Si un container est glissé ici, il devient prioritaire.
+	RegisterParameterContainer("notation_id_container", "Notation ID Container")
+
+
+	' Méthode par défaut : notation_id saisie directement en String.
+	' Une chaîne vide = aucune notation_id.
+	RegisterParameterString("IdNotation", "Notation ID", "", 40, 100, "")
+
+	BuildFieldList()
+	BuildFormatList()
+	BuildOutputList()
+
+	' Le 44 correspond à prices.latest_price dans le menu trié alphabétiquement.
+	' Largeur 42 caractères, hauteur 24 lignes visibles.
+	RegisterParameterDropDown("champ", "Valeur", 44, AFieldLabels, 42, 24)
+	
+	' Format appliqué seulement aux champs numériques marqués comme formatables.
+	RegisterParameterDropDown("format_numerique", "Format", 0, AFormatLabels, 18, 5)
+
+	' Méthode de sortie.
+	RegisterParameterDropDown("output", "Sortie", 0, AOutputLabels, 24, 5)
+	
+	RegisterInfoText("Hub Bourse et Finaances / GetHBF")
+
+end sub
+
+
+' ---------------------------------------------------------------------
+' INIT
+' ---------------------------------------------------------------------
+
+sub OnInit()
+
+	if AFieldLabels.size == 0 then
+		BuildFieldList()
+	end if
+
+	if AFormatLabels.size == 0 then
+		BuildFormatList()
+	end if
+
+	if AOutputLabels.size == 0 then
+		BuildOutputList()
+	end if
+
+
+	UpdateNotationInputMode()
+
+	ClearData()
+	RegisterNewNotation()
+
+end sub
+
+
+' ---------------------------------------------------------------------
+' CHANGEMENT DE PARAMÈTRE
+' ---------------------------------------------------------------------
+
+sub OnParameterChanged(parameterName As String)
+
+	if parameterName = "notation_id_container" then
+
+		UpdateNotationInputMode()
+		RegisterNewNotation()
+
+	elseif parameterName = "IdNotation" then
+
+		' Le paramètre String ne pilote la notation que si aucun container
+		' n'est renseigné.
+		if bUseNotationContainer = false then
+			RegisterNewNotation()
+		end if
+
+	elseif parameterName = "champ" then
+
+		OutputSelectedValue()
+
+	elseif parameterName = "format_numerique" then
+
+		OutputSelectedValue()
+
+	elseif parameterName = "output" then
+
+		OutputSelectedValue()
+
+	end if
+
+end sub
+
+
+' ---------------------------------------------------------------------
+' SÉLECTION DE LA MÉTHODE D'ENTRÉE NOTATION_ID
+'
+' Priorité :
+' 1. Si notation_id_container est renseigné : Geometry texte du container
+' 2. Sinon : paramètre String IdNotation
+' ---------------------------------------------------------------------
+
+Sub UpdateNotationInputMode()
+
+	dim cNotationContainer as Container
+
+	bUseNotationContainer = false
+
+	cNotationContainer = GetParameterContainer("notation_id_container")
+	if cNotationContainer == null then
+		cNotationContainer = this.ParentContainer.Parentcontainer
+	end if
+	if cNotationContainer <> null then
+
+		gNotation_id = (geometry) cNotationContainer.geometry
+
+		if gNotation_id <> null then
+			bUseNotationContainer = true
+			gNotation_id.RegisterTextChangedCallback()
+		end if
+
+	end if
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' CHANGEMENT DE GEOMETRY TEXTE DU CONTAINER NOTATION_ID
+' ---------------------------------------------------------------------
+
+sub OnGeometryChanged(geom As Geometry)
+
+	' On ne tient compte du changement de géométrie que si la méthode
+	' container est active.
+	if bUseNotationContainer then
+		RegisterNewNotation()
+	end if
+
+end sub
+
+
+' ---------------------------------------------------------------------
+' CHANGEMENT SHARED MEMORY
+' ---------------------------------------------------------------------
+
+sub OnSharedMemoryVariableChanged(map As SharedMemory, mapKey As String)
+
+	DisplayValue()
+
+end sub
+
+
+' ---------------------------------------------------------------------
+' CONSTRUCTION DU MENU
+' ---------------------------------------------------------------------
+
+sub BuildFieldList()
+
+	AFieldLabels.Clear
+	AFieldTables.Clear
+	AFieldRows.Clear
+	AFieldCols.Clear
+	AFieldFormat.Clear
+
+
+	' -----------------------------------------------------------------
+	' Champs triés alphabétiquement pour le menu "Valeur affichée"
+	' -----------------------------------------------------------------
+
+	AddField("currency.code", "currency", 0, 0)
+	AddField("currency.editorialName", "currency", 1, 1)
+	AddField("currency.isoCode", "currency", 0, 1)
+	AddField("currency.name", "currency", 1, 0)
+	AddField("currency.type", "currency", 2, 0)
+
+	AddField("instrument.assetClass_code", "instrument", 2, 1)
+	AddField("instrument.assetClass_id", "instrument", 2, 0)
+	AddField("instrument.editorialName", "instrument", 0, 2)
+	AddField("instrument.isin", "instrument", 1, 0)
+	AddField("instrument.name", "instrument", 0, 0)
+	AddField("instrument.nsin_cusip", "instrument", 1, 3)
+	AddField("instrument.nsin_sedol", "instrument", 1, 4)
+	AddField("instrument.nsin_valor", "instrument", 1, 2)
+	AddField("instrument.nsin_wkn", "instrument", 1, 1)
+	AddField("instrument.shortName", "instrument", 0, 1)
+
+	AddField("Logo", "logo", 0, 0)
+
+	AddField("market.country_id", "market", 1, 0)
+	AddField("market.country_name", "market", 1, 1)
+	AddField("market.editorialName", "market", 0, 2)
+	AddField("market.group_id", "market", 3, 0)
+	AddField("market.group_name", "market", 3, 1)
+	AddField("market.name", "market", 0, 0)
+	AddField("market.shortName", "market", 0, 1)
+	AddField("market.timezone_id", "market", 4, 0)
+	AddField("market.timezone_name", "market", 4, 1)
+	AddField("market.type_id", "market", 2, 0)
+	AddField("market.type_name", "market", 2, 1)
+
+	AddField("notation.editorialName", "notation", 5, 0)
+	AddField("notation.factSetMarketSymbol", "notation", 1, 0)
+	AddField("notation.instrument_id", "notation", 4, 0)
+	AddField("notation.symbol", "notation", 0, 0)
+
+	AddField("prices.accumulated_numberTrades", "prices", 9, 0)
+	AddField("prices.accumulated_tradingValue", "prices", 9, 2)
+	AddField("prices.accumulated_tradingVolume", "prices", 9, 1)
+	AddField("prices.currency_id", "prices", 1, 0)
+	AddFormattedField("prices.first_price", "prices", 5, 1)
+	AddField("prices.first_time", "prices", 5, 0)
+	AddField("prices.first_time Heure formatée Paris", "parisTime", 5, 0)
+	AddField("prices.first_tradingVolume", "prices", 5, 2)
+	AddFormattedField("prices.high_price", "prices", 7, 1)
+	AddField("prices.high_time", "prices", 7, 0)
+	AddField("prices.high_tradingVolume", "prices", 7, 2)
+	AddFormattedField("prices.latest_performance_intraday_absolute", "prices", 4, 5)
+	AddPercentFormattedField("prices.latest_performance_intraday_relative", "prices", 4, 6)
+	AddFormattedField("prices.latest_price", "prices", 4, 1)
+	AddField("prices.latest_quoteCondition", "prices", 4, 2)
+	AddField("prices.latest_time", "prices", 4, 0)
+	AddField("prices.latest_time Heure formatée Paris", "parisTime", 4, 0)
+	AddField("prices.latest_tradingValue", "prices", 4, 4)
+	AddField("prices.latest_tradingVolume", "prices", 4, 3)
+	AddFormattedField("prices.low_price", "prices", 6, 1)
+	AddField("prices.low_time", "prices", 6, 0)
+	AddField("prices.low_tradingVolume", "prices", 6, 2)
+	AddField("prices.market_id", "prices", 2, 0)
+	AddField("prices.market_isOpen", "prices", 2, 1)
+	AddField("prices.market_phase", "prices", 2, 2)
+	AddFormattedField("prices.previousClose_price", "prices", 8, 1)
+	AddField("prices.previousClose_time", "prices", 8, 0)
+	AddField("prices.previousClose_time Heure formatée Paris", "parisTime", 8, 0)
+	AddField("prices.quality", "prices", 3, 0)
+	AddField("prices.valueUnit_id", "prices", 0, 0)
+
+	AddField("valueUnit.code", "valueUnit", 0, 0)
+	AddField("valueUnit.editorialName", "valueUnit", 1, 1)
+	AddField("valueUnit.isoCode", "valueUnit", 0, 1)
+	AddField("valueUnit.name", "valueUnit", 1, 0)
+	AddField("valueUnit.type", "valueUnit", 2, 0)
+
+end sub
+
+
+sub BuildFormatList()
+
+	AFormatLabels.Clear
+
+	AFormatLabels.Push("valeur exacte")
+	AFormatLabels.Push(",00")
+	AFormatLabels.Push(",0000")
+	AFormatLabels.Push("majuscule")
+	AFormatLabels.Push("minuscules")
+
+end sub
+
+
+sub BuildOutputList()
+
+	AOutputLabels.Clear
+
+	AOutputLabels.Push("geometry text")
+	AOutputLabels.Push("advanced counter")
+	AOutputLabels.Push("Omo")
+	AOutputLabels.Push("active")
+	AOutputLabels.Push("non active")
+
+end sub
+
+
+sub AddField(sLabel as String, sTable as String, i as Integer, j as Integer)
+
+	AFieldLabels.Push(sLabel)
+	AFieldTables.Push(sTable)
+	AFieldRows.Push(i)
+	AFieldCols.Push(j)
+	AFieldFormat.Push(0)
+
+end sub
+
+
+sub AddFormattedField(sLabel as String, sTable as String, i as Integer, j as Integer)
+
+	AFieldLabels.Push(sLabel)
+	AFieldTables.Push(sTable)
+	AFieldRows.Push(i)
+	AFieldCols.Push(j)
+	AFieldFormat.Push(1)
+
+end sub
+
+
+sub AddPercentFormattedField(sLabel as String, sTable as String, i as Integer, j as Integer)
+
+	AFieldLabels.Push(sLabel)
+	AFieldTables.Push(sTable)
+	AFieldRows.Push(i)
+	AFieldCols.Push(j)
+	AFieldFormat.Push(2)
+
+end sub
+
+
+' ---------------------------------------------------------------------
+' CLEAR DATA
+' ---------------------------------------------------------------------
+
+Sub ClearData()
+
+	AsNotation.Clear
+	AsPricesGet.Clear
+	AsInstrument.Clear
+	AsMarket.Clear
+	AsValueUnit.Clear
+	AsCurrency.Clear
+
+	OutputSelectedValue()
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' CHANGEMENT DE NOTATION_ID
+' ---------------------------------------------------------------------
+
+Sub RegisterNewNotation()
+
+	' On désenregistre les callbacks de l'ancienne notation_id.
+	if sNotationEnCours <> "" then
+		if AsNotation.size > 0 then
+			VizCommunication.Map.UnRegisterChangedCallback("HBF_instrument_" & AsNotation[4][0])
+		end if
+		VizCommunication.Map.UnRegisterChangedCallback("HBF_prices_get_" & sNotationEnCours)
+		VizCommunication.Map.UnRegisterChangedCallback("HBF_notation_"    & sNotationEnCours)
+	end if
+
+
+	' ---------------------------------------------------------
+	' Méthode 1 : container texte prioritaire si renseigné
+	' ---------------------------------------------------------
+
+	if bUseNotationContainer then
+
+		if gNotation_id <> null then
+			sNotationEnCours = gNotation_id.text
+			sNotationEnCours.Trim()
+		else
+			sNotationEnCours = ""
+		end if
+
+
+	' ---------------------------------------------------------
+	' Méthode 2 : paramètre String par défaut
+	' ---------------------------------------------------------
+
+	else
+
+		sNotationEnCours = GetParameterString("IdNotation")
+		sNotationEnCours.Trim()
+
+	end if
+
+
+	' On enregistre les callbacks de la nouvelle notation_id.
+	if sNotationEnCours <> "" then
+		VizCommunication.Map.RegisterChangedCallback("HBF_prices_get_" & sNotationEnCours)
+		VizCommunication.Map.RegisterChangedCallback("HBF_notation_"    & sNotationEnCours)
+	end if
+
+	DisplayValue()
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' RÉCUPÉRATION DES DONNÉES
+' ---------------------------------------------------------------------
+
+Sub DisplayValue()
+
+	AsPricesGet.Clear
+	AsNotation.Clear
+	AsInstrument.Clear
+	AsMarket.Clear
+	AsValueUnit.Clear
+	AsCurrency.Clear
+
+	' Si aucune notation_id valide n'est définie,
+	' on vide simplement la sortie.
+	if sNotationEnCours = "" then
+		OutputSelectedValue()
+		exit sub
+	end if
+
+
+	' Récupération PricesGet et Notation
+
+	AsPricesGet  = (array[array[string]]) VizCommunication.Map["HBF_prices_get_" & sNotationEnCours]
+	AsNotation   = (array[array[string]]) VizCommunication.Map["HBF_notation_"   & sNotationEnCours]
+
+
+	' Récupération ValueUnit / Currency / Market
+
+	if AsPricesGet.size > 0 then
+
+		AsValueUnit = (array[array[string]]) VizCommunication.Map["HBF_valueUnit_" & AsPricesGet[0][0]]
+		VizCommunication.Map.RegisterChangedCallback("HBF_valueUnit_" & AsPricesGet[0][0])
+		AsCurrency  = (array[array[string]]) VizCommunication.Map["HBF_currency_"  & AsPricesGet[1][0]]
+		VizCommunication.Map.RegisterChangedCallback("HBF_currency_"  & AsPricesGet[1][0])
+		AsMarket    = (array[array[string]]) VizCommunication.Map["HBF_market_"    & AsPricesGet[2][0]]
+		VizCommunication.Map.RegisterChangedCallback("HBF_market_"    & AsPricesGet[2][0])
+	else
+
+		if AsNotation.size > 0 then
+			AsValueUnit = (array[array[string]]) VizCommunication.Map["HBF_valueUnit_" & AsNotation[2][0]]
+			VizCommunication.Map.RegisterChangedCallback("HBF_valueUnit_" & AsNotation[2][0])
+			AsMarket    = (array[array[string]]) VizCommunication.Map["HBF_market_"    & AsNotation[3][0]]
+			VizCommunication.Map.RegisterChangedCallback("HBF_market_"    & AsNotation[3][0])
+		end if
+
+	end if
+
+
+	' Récupération Instrument
+
+	if AsNotation.size > 0 then
+		AsInstrument = (array[array[string]]) VizCommunication.Map["HBF_instrument_" & AsNotation[4][0]]
+		VizCommunication.Map.RegisterChangedCallback("HBF_instrument_" & AsNotation[4][0])
+	end if
+
+
+	' Affichage d'une seule valeur
+
+	OutputSelectedValue()
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' SORTIE UNIQUE SUR LE CONTAINER COURANT
+'
+' output :
+' 0 = geometry text
+' 1 = advanced counter
+' 2 = Omo
+' 3 = active
+' 4 = non active
+' ---------------------------------------------------------------------
+
+Sub OutputSelectedValue()
+
+	dim iOutput as Integer
+
+	iOutput = GetParameterInt("output")
+
+	' Cas spécial Logo :
+	' - la texture est créée si le fichier existe
+	' - this.active n'est modifié que pour output = active ou non active
+	if IsSelectedField("Logo") then
+		OutputSelectedValueToLogo(iOutput)
+		exit sub
+	end if
+
+	' Outputs qui ne font que gérer this.active.
+	' Dans ces deux cas, on ne sort ni texte, ni Advanced_Counter, ni Omo.
+	if iOutput = 3 then
+		ApplyActiveOutputFromSelectedValue(false)
+		exit sub
+	elseif iOutput = 4 then
+		ApplyActiveOutputFromSelectedValue(true)
+		exit sub
+	end if
+
+	if iOutput = 2 then
+		OutputSelectedValueToOmo()
+	elseif iOutput = 1 then
+		OutputSelectedValueToAdvancedCounter()
+	else
+		OutputSelectedValueToGeometryText()
+	end if
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' OUTPUT ACTIVE / NON ACTIVE POUR LES VALEURS NON-LOGO
+'
+' output = active :
+'   valeur 0 ou vide  -> this.active = false
+'   autre valeur      -> this.active = true
+'
+' output = non active :
+'   valeur 0 ou vide  -> this.active = true
+'   autre valeur      -> this.active = false
+' ---------------------------------------------------------------------
+
+Sub ApplyActiveOutputFromSelectedValue(bInvert as Boolean)
+
+	dim bZeroOrEmpty as Boolean
+
+	bZeroOrEmpty = IsSelectedValueZeroOrEmpty()
+
+	if bInvert then
+
+		if bZeroOrEmpty then
+			this.active = true
+		else
+			this.active = false
+		end if
+
+	else
+
+		if bZeroOrEmpty then
+			this.active = false
+		else
+			this.active = true
+		end if
+
+	end if
+
+End Sub
+
+
+Function IsSelectedValueZeroOrEmpty() as Boolean
+
+	dim sRawValue as String
+	dim sClean as String
+	dim dVal as Double
+
+	IsSelectedValueZeroOrEmpty = false
+
+	sRawValue = GetSelectedRawValue()
+	sRawValue.Trim()
+
+	if sRawValue = "" then
+		IsSelectedValueZeroOrEmpty = true
+		exit function
+	end if
+
+	if IsNumericText(sRawValue) then
+
+		sClean = NormalizeDecimalString(sRawValue)
+		dVal = (Double) sClean
+
+		if Abs(dVal) < 0.0000000001 then
+			IsSelectedValueZeroOrEmpty = true
+			exit function
+		end if
+
+	end if
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' SORTIE GEOMETRY TEXT
+' ---------------------------------------------------------------------
+
+Sub OutputSelectedValueToGeometryText()
+
+	dim sValue as String
+	sValue = GetSelectedValue()
+
+	if geometry.text <> sValue then
+		geometry.text = sValue
+	end if
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' SORTIE LOGO
+'
+' Comportement voulu :
+' - output normal (geometry text / advanced counter / Omo) :
+'     applique la texture si le fichier existe,
+'     sinon charge une texture vide avec CreateTexture("")
+'
+' - output active / non active :
+'     ne touche jamais à la texture,
+'     pilote seulement this.active selon l'existence du fichier logo
+' ---------------------------------------------------------------------
+
+Sub OutputSelectedValueToLogo(iOutput as Integer)
+
+	dim bLogoExists as Boolean
+
+	' Sortie active :
+	' logo présent -> this.active = true
+	' logo absent  -> this.active = false
+	' Aucun changement de texture.
+	if iOutput = 3 then
+		bLogoExists = LogoFileExists(sNotationEnCours)
+		this.active = bLogoExists
+		exit sub
+	end if
+
+	' Sortie non active :
+	' logo présent -> this.active = false
+	' logo absent  -> this.active = true
+	' Aucun changement de texture.
+	if iOutput = 4 then
+		bLogoExists = LogoFileExists(sNotationEnCours)
+		this.active = Not bLogoExists
+		exit sub
+	end if
+
+	' Sorties normales :
+	' on applique la texture si elle existe,
+	' sinon on charge une texture vide.
+	bLogoExists = Set_Logo(this, sNotationEnCours)
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' SORTIE ADVANCED COUNTER
+'
+' Important :
+' - cette sortie ne concerne que les valeurs numériques
+' - si la valeur choisie n'est pas numérique, on retombe en geometry.text
+'   pour éviter une sortie vide incompréhensible
+' ---------------------------------------------------------------------
+
+Sub OutputSelectedValueToAdvancedCounter()
+
+	dim sRawValue as String
+	dim sTextValue as String
+	dim sClean as String
+	dim dVal as Double
+	dim sSuffix as String
+	dim iFieldFormat as Integer
+
+	sRawValue = GetSelectedRawValue()
+	sTextValue = GetSelectedValue()
+
+	' Si la valeur n'est pas numérique, Advanced_Counter ne peut pas l'afficher.
+	' On utilise alors la sortie texte classique.
+	if IsNumericText(sRawValue) = false then
+
+		if geometry.text <> sTextValue then
+			geometry.text = sTextValue
+		end if
+
+		exit sub
+
+	end if
+
+	sClean = NormalizeDecimalString(sRawValue)
+	dVal = (Double) sClean
+
+	sSuffix = ""
+
+	iFieldFormat = GetSelectedFieldFormat()
+
+
+	' ---------------------------------------------------------
+	' Performance relative
+	'
+	' prices.latest_performance_intraday_relative
+	'
+	' - format exact : valeur brute, pas de %
+	' - format ,00 ou ,0000 : x100 + suffixe " %"
+	' ---------------------------------------------------------
+
+	if iFieldFormat = 2 then
+
+		if IsDecimalFormatSelected() then
+			dVal = dVal * 100.0
+			sSuffix = " %"
+		end if
+
+	end if
+
+
+	' Plus aucun suffixe valueUnit.editorialName.
+	' latest_price et latest_performance_intraday_absolute
+	' restent de simples valeurs numériques formatées.
+
+	PushNumberToCtn(this, dVal, sSuffix)
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' SORTIE OMO
+'
+' Ne fonctionne que pour :
+' - prices.latest_performance_intraday_relative
+' - prices.latest_performance_intraday_absolute
+'
+' X :
+' 0 = négatif
+' 1 = nul
+' 2 = positif
+' ---------------------------------------------------------------------
+
+Sub OutputSelectedValueToOmo()
+
+	dim sRawValue as String
+	dim sClean as String
+	dim dVal as Double
+	dim iVisCon as Integer
+
+	' Sortie inactive pour tous les autres champs.
+	if SelectedFieldUsesOmoOutput() = false then
+		exit sub
+	end if
+
+	sRawValue = GetSelectedRawValue()
+
+	if IsNumericText(sRawValue) = false then
+		exit sub
+	end if
+
+	sClean = NormalizeDecimalString(sRawValue)
+	dVal = (Double) sClean
+
+	if Abs(dVal) < 0.0000000001 then
+		iVisCon = 1
+	elseif dVal < 0.0 then
+		iVisCon = 0
+	else
+		iVisCon = 2
+	end if
+
+	this.GetFunctionPluginInstance("Omo").SetParameterInt("vis_con", iVisCon)
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' RÉCUPÉRATION DE LA VALEUR CHOISIE FORMATÉE
+' ---------------------------------------------------------------------
+
+Function GetSelectedValue() as String
+
+	dim sValue as String
+	dim iSelected as Integer
+
+	sValue = GetSelectedRawValue()
+
+	if AFieldLabels.size == 0 then
+		GetSelectedValue = ""
+		exit function
+	end if
+
+	iSelected = GetParameterInt("champ")
+
+	if iSelected < 0 then
+		GetSelectedValue = ""
+		exit function
+	end if
+
+	if iSelected >= AFieldLabels.size then
+		GetSelectedValue = ""
+		exit function
+	end if
+
+
+	' Application du format numérique seulement aux champs marqués.
+	if AFieldFormat[iSelected] = 1 then
+
+		' Format numérique simple.
+		' Plus aucun suffixe valueUnit.editorialName.
+		sValue = FormatNumericValue(sValue)
+
+	elseif AFieldFormat[iSelected] = 2 then
+
+		' Performance relative :
+		' garde la logique x100 + " %" uniquement pour ,00 / ,0000.
+		sValue = FormatNumericPercentValue(sValue)
+
+	end if
+
+	' Format texte : majuscules / minuscules.
+	' Ne concerne pas Logo, qui est traité avant cette fonction.
+	if IsUppercaseFormatSelected() then
+		sValue.MakeUpper()
+	elseif IsLowercaseFormatSelected() then
+		sValue.MakeLower()
+	end if
+
+	GetSelectedValue = sValue
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' RÉCUPÉRATION DE LA VALEUR CHOISIE BRUTE
+' ---------------------------------------------------------------------
+
+Function GetSelectedRawValue() as String
+
+	GetSelectedRawValue = ""
+
+	if AFieldLabels.size == 0 then
+		exit function
+	end if
+
+	dim iSelected as Integer
+	iSelected = GetParameterInt("champ")
+
+	if iSelected < 0 then
+		exit function
+	end if
+
+	if iSelected >= AFieldLabels.size then
+		exit function
+	end if
+
+	dim sTable as String
+	dim i as Integer
+	dim j as Integer
+	dim sValue as String
+
+	sTable = AFieldTables[iSelected]
+	i = AFieldRows[iSelected]
+	j = AFieldCols[iSelected]
+
+	sValue = ""
+
+
+	if sTable = "prices" then
+
+		sValue = GetCell(AsPricesGet, i, j)
+
+	elseif sTable = "parisTime" then
+
+		sValue = FormatLatestTimeParis(GetCell(AsPricesGet, i, j))
+
+	elseif sTable = "notation" then
+
+		sValue = GetCell(AsNotation, i, j)
+
+	elseif sTable = "valueUnit" then
+
+		sValue = GetCell(AsValueUnit, i, j)
+
+	elseif sTable = "currency" then
+
+		sValue = GetCell(AsCurrency, i, j)
+
+	elseif sTable = "market" then
+
+		sValue = GetCell(AsMarket, i, j)
+
+	elseif sTable = "instrument" then
+
+		sValue = GetCell(AsInstrument, i, j)
+
+	elseif sTable = "logo" then
+
+		sValue = sNotationEnCours
+
+	end if
+
+	GetSelectedRawValue = sValue
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' FORMAT DU CHAMP SÉLECTIONNÉ
+' ---------------------------------------------------------------------
+
+Function GetSelectedFieldFormat() as Integer
+
+	GetSelectedFieldFormat = 0
+
+	if AFieldLabels.size == 0 then
+		exit function
+	end if
+
+	dim iSelected as Integer
+	iSelected = GetParameterInt("champ")
+
+	if iSelected < 0 then
+		exit function
+	end if
+
+	if iSelected >= AFieldFormat.size then
+		exit function
+	end if
+
+	GetSelectedFieldFormat = AFieldFormat[iSelected]
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' TEST DU CHAMP SÉLECTIONNÉ
+' ---------------------------------------------------------------------
+
+Function IsSelectedField(sFieldName as String) as Boolean
+
+	IsSelectedField = false
+
+	if AFieldLabels.size == 0 then
+		exit function
+	end if
+
+	dim iSelected as Integer
+	iSelected = GetParameterInt("champ")
+
+	if iSelected < 0 then
+		exit function
+	end if
+
+	if iSelected >= AFieldLabels.size then
+		exit function
+	end if
+
+	if AFieldLabels[iSelected] = sFieldName then
+		IsSelectedField = true
+	end if
+
+End Function
+
+
+
+
+' ---------------------------------------------------------------------
+' CHAMPS AUTORISÉS POUR SORTIE OMO
+' ---------------------------------------------------------------------
+
+Function SelectedFieldUsesOmoOutput() as Boolean
+
+	SelectedFieldUsesOmoOutput = false
+
+	if IsSelectedField("prices.latest_performance_intraday_relative") then
+		SelectedFieldUsesOmoOutput = true
+		exit function
+	end if
+
+	if IsSelectedField("prices.latest_performance_intraday_absolute") then
+		SelectedFieldUsesOmoOutput = true
+		exit function
+	end if
+
+	if IsSelectedField("prices.last_intraday_performance_absolute") then
+		SelectedFieldUsesOmoOutput = true
+		exit function
+	end if
+
+End Function
+
+
+
+
+' ---------------------------------------------------------------------
+' TEST FORMAT DÉCIMAL
+'
+' 1 = ,00
+' 2 = ,0000
+' ---------------------------------------------------------------------
+
+Function IsDecimalFormatSelected() as Boolean
+
+	dim iFormat as Integer
+
+	iFormat = GetParameterInt("format_numerique")
+
+	IsDecimalFormatSelected = false
+
+	if iFormat = 1 or iFormat = 2 then
+		IsDecimalFormatSelected = true
+	end if
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' TEST FORMAT MAJUSCULE
+'
+' 3 = majuscule
+' ---------------------------------------------------------------------
+
+Function IsUppercaseFormatSelected() as Boolean
+
+	IsUppercaseFormatSelected = false
+
+	if GetParameterInt("format_numerique") = 3 then
+		IsUppercaseFormatSelected = true
+	end if
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' TEST FORMAT MINUSCULES
+'
+' 4 = minuscules
+' ---------------------------------------------------------------------
+
+Function IsLowercaseFormatSelected() as Boolean
+
+	IsLowercaseFormatSelected = false
+
+	if GetParameterInt("format_numerique") = 4 then
+		IsLowercaseFormatSelected = true
+	end if
+
+End Function
+
+
+
+
+
+
+' ---------------------------------------------------------------------
+' LOGO
+'
+' Set_Logo :
+' - crée la texture si le fichier logo est disponible
+' - sinon charge une texture vide avec CreateTexture("")
+' - ne modifie jamais this.active
+'
+' LogoFileExists :
+' - teste uniquement l'existence du fichier logo
+' - ne touche jamais à la texture
+' - ne modifie jamais this.active
+'
+' Le fichier attendu est :
+' PathLogo & Id & ".png"
+' ---------------------------------------------------------------------
+
+Function BuildLogoPath(Id as string) as String
+
+	BuildLogoPath = ""
+
+	Id.Trim()
+
+	if Id = "" then
+		exit function
+	end if
+
+	BuildLogoPath = PathLogo & Id & ".png"
+
+End Function
+
+
+Function LogoFileExists(Id as string) as Boolean
+
+	dim sPath as String
+
+	LogoFileExists = false
+
+	sPath = BuildLogoPath(Id)
+
+	if sPath = "" then
+		exit function
+	end if
+
+	if System.FileExists(sPath) then
+		LogoFileExists = true
+	end if
+
+End Function
+
+
+Function Set_Logo(cContainer as Container, Id as string) as Boolean
+
+	dim sPath as String
+
+	Set_Logo = false
+
+	sPath = BuildLogoPath(Id)
+
+	if sPath = "" then
+		cContainer.CreateTexture("")
+		exit function
+	end if
+
+	if System.FileExists(sPath) then
+		cContainer.CreateTexture(sPath)
+		Set_Logo = true
+	else
+		cContainer.CreateTexture("")
+	end if
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' NOMBRE DE DÉCIMALES POUR ADVANCED_COUNTER
+'
+' Reprise de la logique du menu format_numerique :
+' 0 = valeur exacte -> 0 décimale côté Advanced_Counter
+' 1 = ,00          -> 2 décimales
+' 2 = ,0000        -> 4 décimales
+' 3 = majuscule    -> 0 décimale côté Advanced_Counter
+' 4 = minuscules   -> 0 décimale côté Advanced_Counter
+' ---------------------------------------------------------------------
+
+Function GetAdvancedCounterDecimalCount() as Integer
+
+	dim iFormat as Integer
+
+	iFormat = GetParameterInt("format_numerique")
+
+	if iFormat = 1 then
+		GetAdvancedCounterDecimalCount = 2
+	elseif iFormat = 2 then
+		GetAdvancedCounterDecimalCount = 4
+	else
+		GetAdvancedCounterDecimalCount = 0
+	end if
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' PROCESS ADVANCED_COUNTER
+'
+' Formatage du mask Advanced_Counter en rapport avec la valeur Double
+'
+' Ctn    = Container cible équipé d'un Advanced_Counter
+' dVal   = valeur Double à intégrer
+' Suffix = suffixe à intégrer au mask, exemple " %"
+' ---------------------------------------------------------------------
+
+Sub PushNumberToCtn(ByVal Ctn As Container, ByVal dVal As Double, ByVal Suffix As String)
+
+	Dim MaskFull As String
+	Dim DigitCount As Integer
+	Dim x As Integer
+	Dim iDecimalCount As Integer
+
+	MaskFull = ""
+
+	' Test de la valeur dVal si proche de 0.00009 = 0.0000
+	If Abs(dVal) < 0.00009 Then
+		dVal = 0.0000
+	End If
+
+	' Formatage du mask : partie entière de la valeur
+	DigitCount = 0
+
+	For x = 1 to Len(CStr(Abs(CInt(dVal))))
+
+		DigitCount = DigitCount + 1
+
+		If DigitCount = 4 Then
+			MaskFull = "# " & MaskFull
+			DigitCount = 1
+		Else
+			MaskFull = "#" & MaskFull
+		End If	
+
+	Next
+
+	' Traitement des décimales
+	iDecimalCount = GetAdvancedCounterDecimalCount()
+
+	If iDecimalCount <> 0 Then
+
+		MaskFull = MaskFull & "."
+
+		For x = 1 to iDecimalCount
+			MaskFull = MaskFull & "#"
+		Next		
+
+	End If
+
+	' Traitement du prefix : espace entre prefix + ou - et valeur
+	' Option plugin : "Force prefix" est True/False
+	If Ctn.GetFunctionPluginInstance("Advanced_Counter").GetParameterBool("fprefix") Then
+
+		If dVal <> 0.0000 Then
+			MaskFull = "# " & MaskFull
+		End If
+
+	End If
+
+	' Intégration du MASK + suffix
+	Ctn.GetFunctionPluginInstance("Advanced_Counter").SetParameterString("inpmask", MaskFull & Suffix)
+
+	' Intégration de la valeur Double
+	' Exemple attendu : -12345.987 -> - 12 345.98 %
+	Ctn.GetFunctionPluginInstance("Advanced_Counter").SetParameterDouble("fnumber", dVal)
+
+End Sub
+
+
+' ---------------------------------------------------------------------
+' LECTURE PROTÉGÉE D'UNE CELLULE
+' ---------------------------------------------------------------------
+
+Function GetCell(AAsTableau as array[array[string]], i as Integer, j as Integer) as String
+
+	GetCell = ""
+
+	if AAsTableau.size > i then
+		if AAsTableau[i].size > j then
+			GetCell = AAsTableau[i][j]
+		end if
+	end if
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' FORMATAGE latest_time UTC -> HEURE DE PARIS
+'
+' Entrée attendue :
+'   2026-06-25 09:18:25
+' ou
+'   2026-06-25T09:18:25
+'
+' Sortie :
+'   25/06/2026 11:18:25
+' ---------------------------------------------------------------------
+
+Function FormatLatestTimeParis(sUtc as String) as String
+
+	FormatLatestTimeParis = ""
+
+	if sUtc.length < 10 then
+		exit function
+	end if
+
+	dim y as integer
+	dim m as integer
+	dim d as integer
+	dim h as integer
+	dim mn as integer
+	dim sec as integer
+
+	y = 0
+	m = 0
+	d = 0
+	h = 0
+	mn = 0
+	sec = 0
+
+
+	' ---------------------------------------------------------
+	' Cas 1 : format ISO
+	' 2026-06-30 09:18:25
+	' 2026-06-30T09:18:25
+	' ---------------------------------------------------------
+
+	if sUtc.GetSubstring(4, 1) = "-" then
+
+		y   = (integer) sUtc.GetSubstring(0, 4)
+		m   = (integer) sUtc.GetSubstring(5, 2)
+		d   = (integer) sUtc.GetSubstring(8, 2)
+
+		if sUtc.length >= 19 then
+			h   = (integer) sUtc.GetSubstring(11, 2)
+			mn  = (integer) sUtc.GetSubstring(14, 2)
+			sec = (integer) sUtc.GetSubstring(17, 2)
+		end if
+
+
+	' ---------------------------------------------------------
+	' Cas 2 : format français déjà en JJ/MM/AAAA
+	' 30/06/2026 09:18:25
+	' ---------------------------------------------------------
+
+	elseif sUtc.GetSubstring(2, 1) = "/" then
+
+		d   = (integer) sUtc.GetSubstring(0, 2)
+		m   = (integer) sUtc.GetSubstring(3, 2)
+		y   = (integer) sUtc.GetSubstring(6, 4)
+
+		if sUtc.length >= 19 then
+			h   = (integer) sUtc.GetSubstring(11, 2)
+			mn  = (integer) sUtc.GetSubstring(14, 2)
+			sec = (integer) sUtc.GetSubstring(17, 2)
+		end if
+
+	else
+
+		' Format non reconnu
+		FormatLatestTimeParis = sUtc
+		exit function
+
+	end if
+
+
+	' ---------------------------------------------------------
+	' Sécurité date
+	' ---------------------------------------------------------
+
+	if y < 1900 or m < 1 or m > 12 or d < 1 or d > 31 then
+		FormatLatestTimeParis = sUtc
+		exit function
+	end if
+
+
+	' ---------------------------------------------------------
+	' Ajout offset Paris : UTC+2 été, UTC+1 hiver
+	' ---------------------------------------------------------
+
+	if IsParisSummerTimeUTC(y, m, d, h) then
+		h = h + 2
+	else
+		h = h + 1
+	end if
+
+
+	' ---------------------------------------------------------
+	' Passage au jour suivant
+	' ---------------------------------------------------------
+
+	if h >= 24 then
+
+		h = h - 24
+		d = d + 1
+
+		if d > DaysInMonth(y, m) then
+			d = 1
+			m = m + 1
+
+			if m > 12 then
+				m = 1
+				y = y + 1
+			end if
+		end if
+
+	end if
+
+
+	FormatLatestTimeParis = TwoDigits(d) & "/" & TwoDigits(m) & "/" & y & " " & TwoDigits(h) & ":" & TwoDigits(mn) & ":" & TwoDigits(sec)
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' DÉTECTION HEURE D'ÉTÉ PARIS
+'
+' Règle Europe :
+' - début : dernier dimanche de mars à 01:00 UTC
+' - fin   : dernier dimanche d'octobre à 01:00 UTC
+' ---------------------------------------------------------------------
+
+Function IsParisSummerTimeUTC(y as integer, m as integer, d as integer, h as integer) as boolean
+
+	IsParisSummerTimeUTC = false
+
+	if m > 3 and m < 10 then
+		IsParisSummerTimeUTC = true
+		exit function
+	end if
+
+	if m < 3 or m > 10 then
+		IsParisSummerTimeUTC = false
+		exit function
+	end if
+
+	dim lastSunday as integer
+
+	if m = 3 then
+
+		lastSunday = LastSundayOfMonth(y, 3)
+
+		if d > lastSunday then
+			IsParisSummerTimeUTC = true
+		elseif d < lastSunday then
+			IsParisSummerTimeUTC = false
+		else
+			if h >= 1 then
+				IsParisSummerTimeUTC = true
+			else
+				IsParisSummerTimeUTC = false
+			end if
+		end if
+
+		exit function
+
+	end if
+
+	if m = 10 then
+
+		lastSunday = LastSundayOfMonth(y, 10)
+
+		if d < lastSunday then
+			IsParisSummerTimeUTC = true
+		elseif d > lastSunday then
+			IsParisSummerTimeUTC = false
+		else
+			if h < 1 then
+				IsParisSummerTimeUTC = true
+			else
+				IsParisSummerTimeUTC = false
+			end if
+		end if
+
+		exit function
+
+	end if
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' DERNIER DIMANCHE DU MOIS
+' ---------------------------------------------------------------------
+
+Function LastSundayOfMonth(y as integer, m as integer) as integer
+
+	dim lastDay as integer
+	dim dow as integer
+
+	lastDay = DaysInMonth(y, m)
+
+	' 0 = dimanche, 1 = lundi, etc.
+	dow = DayOfWeek(y, m, lastDay)
+
+	LastSundayOfMonth = lastDay - dow
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' JOUR DE LA SEMAINE
+'
+' Retour :
+' 0 = dimanche
+' 1 = lundi
+' 2 = mardi
+' 3 = mercredi
+' 4 = jeudi
+' 5 = vendredi
+' 6 = samedi
+' ---------------------------------------------------------------------
+
+Function DayOfWeek(y as integer, m as integer, d as integer) as integer
+
+	dim yy as integer
+	yy = y
+
+	if m < 3 then
+		yy = yy - 1
+	end if
+
+	DayOfWeek = (yy + IntDiv(yy, 4) - IntDiv(yy, 100) + IntDiv(yy, 400) + MonthCode(m) + d) mod 7
+
+End Function
+
+
+Function MonthCode(m as integer) as integer
+
+	MonthCode = 0
+
+	if m = 1 then
+		MonthCode = 0
+	elseif m = 2 then
+		MonthCode = 3
+	elseif m = 3 then
+		MonthCode = 2
+	elseif m = 4 then
+		MonthCode = 5
+	elseif m = 5 then
+		MonthCode = 0
+	elseif m = 6 then
+		MonthCode = 3
+	elseif m = 7 then
+		MonthCode = 5
+	elseif m = 8 then
+		MonthCode = 1
+	elseif m = 9 then
+		MonthCode = 4
+	elseif m = 10 then
+		MonthCode = 6
+	elseif m = 11 then
+		MonthCode = 2
+	elseif m = 12 then
+		MonthCode = 4
+	end if
+
+End Function
+
+
+Function DaysInMonth(y as integer, m as integer) as integer
+
+	DaysInMonth = 31
+
+	if m = 2 then
+
+		if IsLeapYear(y) then
+			DaysInMonth = 29
+		else
+			DaysInMonth = 28
+		end if
+
+	elseif m = 4 or m = 6 or m = 9 or m = 11 then
+
+		DaysInMonth = 30
+
+	end if
+
+End Function
+
+
+Function IsLeapYear(y as integer) as boolean
+
+	IsLeapYear = false
+
+	if y mod 400 = 0 then
+		IsLeapYear = true
+	elseif y mod 100 = 0 then
+		IsLeapYear = false
+	elseif y mod 4 = 0 then
+		IsLeapYear = true
+	end if
+
+End Function
+
+
+Function IntDiv(a as integer, b as integer) as integer
+
+	IntDiv = (a - (a mod b)) / b
+
+End Function
+
+
+Function TwoDigits(n as integer) as String
+
+	if n < 10 then
+		TwoDigits = "0" & n
+	else
+		TwoDigits = "" & n
+	end if
+
+End Function
+
+
+' ---------------------------------------------------------------------
+' FORMATAGE NUMÉRIQUE
+'
+' Paramètre :
+'   0 = valeur exacte
+'   1 = ,00
+'   2 = ,0000
+'
+' Exemple :
+'   8395.330078125 -> 8395,33
+'   8395.330078125 -> 8395,3301
+' ---------------------------------------------------------------------
+
+Function FormatNumericValue(sIn as String) as String
+
+	FormatNumericValue = sIn
+
+	if sIn = "" then
+		exit function
+	end if
+
+	dim iFormat as Integer
+	iFormat = GetParameterInt("format_numerique")
+
+	' 0 = valeur exacte
+	if iFormat = 0 then
+		FormatNumericValue = sIn
+		exit function
+	end if
+
+	if IsNumericText(sIn) = false then
+		FormatNumericValue = sIn
+		exit function
+	end if
+
+	dim digits as Integer
+
+	if iFormat = 1 then
+		digits = 2
+	elseif iFormat = 2 then
+		digits = 4
+	else
+		FormatNumericValue = sIn
+		exit function
+	end if
+
+	FormatNumericValue = FormatDecimalFrench(sIn, digits)
+
+End Function
+
+
+Function FormatNumericPercentValue(sIn as String) as String
+
+	FormatNumericPercentValue = sIn
+
+	if sIn = "" then
+		exit function
+	end if
+
+	dim iFormat as Integer
+	iFormat = GetParameterInt("format_numerique")
+
+	' Seuls les formats ,00 et ,0000 déclenchent la conversion en %.
+	' Les autres formats, y compris majuscule, gardent la valeur brute.
+	if IsDecimalFormatSelected() = false then
+		FormatNumericPercentValue = sIn
+		exit function
+	end if
+
+	if IsNumericText(sIn) = false then
+		FormatNumericPercentValue = sIn
+		exit function
+	end if
+
+	dim sClean as String
+	dim v as Double
+	dim sPercent as String
+
+	sClean = NormalizeDecimalString(sIn)
+	v = (Double) sClean
+
+	' Conversion relatif -> pourcentage
+	v = v * 100.0
+
+	sPercent = "" & v
+
+	FormatNumericPercentValue = FormatNumericValue(sPercent) & " %"
+
+End Function
+
+
+Function FormatDecimalFrench(sIn as String, digits as Integer) as String
+
+	dim sClean as String
+	dim v as Double
+	dim factorInt as Integer
+	dim scaled as Integer
+	dim scaledAbs as Integer
+	dim integerPart as Integer
+	dim decimalPart as Integer
+	dim sSign as String
+
+	sClean = NormalizeDecimalString(sIn)
+
+	v = (Double) sClean
+
+	if digits = 2 then
+		factorInt = 100
+	elseif digits = 4 then
+		factorInt = 10000
+	else
+		factorInt = 1
+	end if
+
+
+	' Arrondi simple.
+	if v >= 0 then
+		scaled = (Integer) ((v * factorInt) + 0.5)
+	else
+		scaled = (Integer) ((v * factorInt) - 0.5)
+	end if
+
+
+	sSign = ""
+
+	if scaled < 0 then
+		sSign = "-"
+		scaledAbs = -scaled
+	else
+		scaledAbs = scaled
+	end if
+
+	integerPart = IntDiv(scaledAbs, factorInt)
+	decimalPart = scaledAbs mod factorInt
+
+	FormatDecimalFrench = sSign & integerPart & "," & PadDigits(decimalPart, digits)
+
+End Function
+
+
+Function NormalizeDecimalString(sIn as String) as String
+
+	dim sOut as String
+	dim c as String
+	dim k as Integer
+
+	sOut = ""
+
+	for k = 0 to sIn.length - 1
+
+		c = sIn.GetSubstring(k, 1)
+
+		if c = "," then
+			sOut = sOut & "."
+		elseif c = " " then
+			' on ignore les espaces
+		else
+			sOut = sOut & c
+		end if
+
+	next
+
+	NormalizeDecimalString = sOut
+
+End Function
+
+
+Function PadDigits(n as Integer, digits as Integer) as String
+
+	dim s as String
+
+	s = "" & n
+
+	do while s.length < digits
+		s = "0" & s
+	loop
+
+	PadDigits = s
+
+End Function
+
+
+Function IsNumericText(sIn as String) as Boolean
+
+	IsNumericText = false
+
+	if sIn = "" then
+		exit function
+	end if
+
+	dim k as Integer
+	dim c as String
+	dim hasDigit as Boolean
+
+	hasDigit = false
+
+	for k = 0 to sIn.length - 1
+
+		c = sIn.GetSubstring(k, 1)
+
+		if IsDigitChar(c) then
+
+			hasDigit = true
+
+		elseif c = "." then
+
+			' accepté
+
+		elseif c = "," then
+
+			' accepté
+
+		elseif c = "-" then
+
+			' accepté
+
+		elseif c = "+" then
+
+			' accepté
+
+		elseif c = " " then
+
+			' accepté
+
+		else
+
+			exit function
+
+		end if
+
+	next
+
+	IsNumericText = hasDigit
+
+End Function
+
+
+Function IsDigitChar(c as String) as Boolean
+
+	IsDigitChar = false
+
+	if c = "0" then
+		IsDigitChar = true
+	elseif c = "1" then
+		IsDigitChar = true
+	elseif c = "2" then
+		IsDigitChar = true
+	elseif c = "3" then
+		IsDigitChar = true
+	elseif c = "4" then
+		IsDigitChar = true
+	elseif c = "5" then
+		IsDigitChar = true
+	elseif c = "6" then
+		IsDigitChar = true
+	elseif c = "7" then
+		IsDigitChar = true
+	elseif c = "8" then
+		IsDigitChar = true
+	elseif c = "9" then
+		IsDigitChar = true
+	end if
+
+End Function
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
