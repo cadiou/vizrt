@@ -131,7 +131,7 @@ dim iLogoCacheTextureId as Integer
 dim iLogoCacheImageId as Integer
 
 ' Chemin logo
-Dim PathLogo as string = "//rmc.local//donnees//BFMTVVIZ//_NX_CHANNELS//_Channels_Data//B02_BfmBu//Bourses//Logos//Centre//"
+Dim PathLogo as string = "//rmc.local//donnees//BFMTVVIZ//_NX_CHANNELS//_Channels_Data//B02_BfmBu//Bourses//Logos//Gauche//"
 
 ' Chemin Logo de developpement -- a supprimer en prod
 if system.hostname = "EUCLID" then
