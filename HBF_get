@@ -1,17 +1,21 @@
 ' Hub Bourse et Finance
 ' GetHBF{Notation_id}
 ' 
-' 260915 baptiste.cadiou@bfmbusiness.fr
+' 261105 baptiste.cadiou@bfmbusiness.fr
 '
 '
 ' IMPORTANT :
-' - notation_id est lu par défaut depuis le paramètre String "IdNotation"
-' - si un container est renseigné dans le paramètre "notation_id_container",
-'   alors ce container devient prioritaire
-' - dans ce cas, notation_id est lu depuis la Geometry texte du container
+' - la source de notation_id est choisie explicitement dans "notation_id_source"
+' - Container : Geometry texte du container "notation_id_container"
+' - Parameter : paramètre String "IdNotation" (choix par défaut)
+' - Parent Container Geometry : Geometry texte du parent du container courant
+' - Grand Parent Container Geometry : Geometry texte du grand-parent
+' - aucun repli automatique : une source absente donne un identifiant vide
+' - identifiants des dépendances lus avec GetCell(), sans clé pour un ID vide
+' - abonnements SHM mémorisés séparément et synchronisés seulement si nécessaire
 '
 ' SORTIE :
-' - output = geometry text :
+' - output = text / image :
 '   la valeur choisie est écrite dans geometry.text du container courant
 '
 ' - output = advanced counter :
@@ -30,19 +34,21 @@
 '   logique inverse de output = active
 '
 ' - champ = Logo :
-'   en sortie normale, crée la texture logo si le fichier existe,
-'   sinon charge une texture vide avec CreateTexture("")
+'   en sortie normale, utilise l'image de la texture de object$VIDE comme repli ;
+'   si le fichier manque ou si la texture/image chargée est invalide,
+'   cette texture de scène est appliquée, sans changer this.active
+'   object$VIDE doit rester présent avec sa texture vide valide
 '   en sortie active/non active, ne touche pas à la texture
 '   et pilote seulement this.active selon l'existence du fichier
 '
 ' - prices.latest_price :
-'   si format_numerique = ,00 ou ,0000, applique seulement le format numérique
+'   si format_numerique = ,00 ou ,0000, applique le format numérique et Suffix
 '
 ' - prices.latest_performance_intraday_absolute :
-'   si format_numerique = ,00 ou ,0000, applique seulement le format numérique
+'   si format_numerique = ,00 ou ,0000, applique le format numérique et Suffix
 '
 ' - prices.latest_performance_intraday_relative :
-'   si format_numerique = ,00 ou ,0000, multiplie par 100 et ajoute " %"
+'   si format_numerique = ,00 ou ,0000, multiplie par 100 et ajoute Suffix
 '
 ' - format_numerique = majuscule :
 '   met la sortie texte en majuscules, sauf champ Logo
@@ -60,6 +66,7 @@
 
 dim gNotation_id as geometry
 dim bUseNotationContainer as boolean
+dim ANotationSourceLabels as array[string]
 
 
 ' ---------------------------------------------------------------------
@@ -68,6 +75,14 @@ dim bUseNotationContainer as boolean
 
 dim AsCurrency, AsInstrument, AsMarket, AsNotation, AsPricesGet, AsValueUnit as array[array[string]]
 dim sNotationEnCours as string
+
+' Clés SHM réellement surveillées, indépendantes du contenu des tableaux.
+dim sKeyPrices as String
+dim sKeyNotation as String
+dim sKeyInstrument as String
+dim sKeyMarket as String
+dim sKeyValueUnit as String
+dim sKeyCurrency as String
 
 
 ' ---------------------------------------------------------------------
@@ -97,7 +112,7 @@ dim AFormatLabels as array[string]
 ' ---------------------------------------------------------------------
 ' OUTPUT
 '
-' 0 = geometry text
+' 0 = text / image
 ' 1 = advanced counter
 ' 2 = Omo
 ' 3 = active
@@ -106,6 +121,14 @@ dim AFormatLabels as array[string]
 
 dim AOutputLabels as array[string]
 
+
+' Cache logo : uniquement un chargement réussi, jamais une simple existence.
+' Identités natives VizId (Integer) : pas d'égalité non vérifiée entre objets.
+dim sLogoCachePath as String
+dim bLogoCacheLoaded as Boolean
+dim iLogoCacheContainerId as Integer
+dim iLogoCacheTextureId as Integer
+dim iLogoCacheImageId as Integer
 
 ' Chemin logo
 Dim PathLogo as string = "//rmc.local//donnees//BFMTVVIZ//_NX_CHANNELS//_Channels_Data//B02_BfmBu//Bourses//Logos//Centre//"
@@ -123,12 +146,14 @@ end if
 
 sub OnInitParameters()
 
-	' Méthode alternative : container texte contenant notation_id.
-	' Si un container est glissé ici, il devient prioritaire.
+	BuildNotationSourceList()
+	RegisterParameterDropDown("notation_id_source", "Notation ID Source", 1, ANotationSourceLabels, 38, 4)
+
+	' Source Container : container texte contenant notation_id.
 	RegisterParameterContainer("notation_id_container", "Notation ID Container")
 
 
-	' Méthode par défaut : notation_id saisie directement en String.
+	' Source Parameter : notation_id saisie directement en String.
 	' Une chaîne vide = aucune notation_id.
 	RegisterParameterString("IdNotation", "Notation ID", "", 40, 100, "")
 
@@ -144,6 +169,8 @@ sub OnInitParameters()
 	RegisterParameterDropDown("format_numerique", "Format", 0, AFormatLabels, 18, 5)
 
 	' Méthode de sortie.
+	RegisterParameterString("Suffix", "Suffix", "", 20, 50, "")
+
 	RegisterParameterDropDown("output", "Sortie", 0, AOutputLabels, 24, 5)
 	
 	RegisterInfoText("Hub Bourse et Finaances / GetHBF")
@@ -156,6 +183,12 @@ end sub
 ' ---------------------------------------------------------------------
 
 sub OnInit()
+
+	ResetLogoCache()
+
+	if ANotationSourceLabels.size == 0 then
+		BuildNotationSourceList()
+	end if
 
 	if AFieldLabels.size == 0 then
 		BuildFieldList()
@@ -184,67 +217,86 @@ end sub
 
 sub OnParameterChanged(parameterName As String)
 
-	if parameterName = "notation_id_container" then
-
+	if parameterName = "notation_id_source" then
 		UpdateNotationInputMode()
 		RegisterNewNotation()
 
-	elseif parameterName = "IdNotation" then
+	elseif parameterName = "notation_id_container" then
+		if GetParameterInt("notation_id_source") = 0 then
+			UpdateNotationInputMode()
+			RegisterNewNotation()
+		end if
 
-		' Le paramètre String ne pilote la notation que si aucun container
-		' n'est renseigné.
-		if bUseNotationContainer = false then
+	elseif parameterName = "IdNotation" then
+		if GetParameterInt("notation_id_source") = 1 then
 			RegisterNewNotation()
 		end if
 
 	elseif parameterName = "champ" then
-
 		OutputSelectedValue()
-
 	elseif parameterName = "format_numerique" then
-
 		OutputSelectedValue()
-
+	elseif parameterName = "Suffix" then
+		OutputSelectedValue()
 	elseif parameterName = "output" then
-
 		OutputSelectedValue()
-
 	end if
 
 end sub
 
-
 ' ---------------------------------------------------------------------
 ' SÉLECTION DE LA MÉTHODE D'ENTRÉE NOTATION_ID
 '
-' Priorité :
-' 1. Si notation_id_container est renseigné : Geometry texte du container
-' 2. Sinon : paramètre String IdNotation
+' Source explicite : 0 = Container, 1 = Parameter,
+' 2 = Parent Container Geometry, 3 = Grand Parent Container Geometry.
+' Aucun repli implicite vers une autre source.
 ' ---------------------------------------------------------------------
 
 Sub UpdateNotationInputMode()
 
 	dim cNotationContainer as Container
+	dim cParent as Container
+	dim iSource as Integer
 
-	bUseNotationContainer = false
-
-	cNotationContainer = GetParameterContainer("notation_id_container")
-	if cNotationContainer == null then
-		cNotationContainer = this.ParentContainer.Parentcontainer
-	end if
-	if cNotationContainer <> null then
-
-		gNotation_id = (geometry) cNotationContainer.geometry
-
-		if gNotation_id <> null then
-			bUseNotationContainer = true
-			gNotation_id.RegisterTextChangedCallback()
+	' Le callback Geometry précédent ne doit plus surveiller l'ancienne source.
+	if gNotation_id <> null then
+		if gNotation_id.Valid then
+			gNotation_id.UnregisterChangedCallback()
 		end if
+	end if
 
+	gNotation_id = null
+	bUseNotationContainer = false
+	cNotationContainer = null
+	iSource = GetParameterInt("notation_id_source")
+
+	if iSource = 0 then
+		cNotationContainer = GetParameterContainer("notation_id_container")
+	elseif iSource = 2 then
+		cNotationContainer = this.ParentContainer
+	elseif iSource = 3 then
+		cParent = this.ParentContainer
+		if cParent <> null then
+			if cParent.Valid then
+				cNotationContainer = cParent.ParentContainer
+			end if
+		end if
+	end if
+
+	if cNotationContainer <> null then
+		if cNotationContainer.Valid = false then
+			exit sub
+		end if
+		gNotation_id = (geometry) cNotationContainer.geometry
+		if gNotation_id <> null then
+			if gNotation_id.Valid then
+				bUseNotationContainer = true
+				gNotation_id.RegisterTextChangedCallback()
+			end if
+		end if
 	end if
 
 End Sub
-
 
 ' ---------------------------------------------------------------------
 ' CHANGEMENT DE GEOMETRY TEXTE DU CONTAINER NOTATION_ID
@@ -252,14 +304,28 @@ End Sub
 
 sub OnGeometryChanged(geom As Geometry)
 
-	' On ne tient compte du changement de géométrie que si la méthode
-	' container est active.
-	if bUseNotationContainer then
+	if bUseNotationContainer = false then
+		exit sub
+	end if
+	if gNotation_id == null then
+		exit sub
+	end if
+	if geom == null then
+		exit sub
+	end if
+	if gNotation_id.Valid = false then
+		exit sub
+	end if
+	if geom.Valid = false then
+		exit sub
+	end if
+
+	' Ignorer un éventuel événement déjà en attente de l'ancienne source.
+	if geom.VizId = gNotation_id.VizId then
 		RegisterNewNotation()
 	end if
 
 end sub
-
 
 ' ---------------------------------------------------------------------
 ' CHANGEMENT SHARED MEMORY
@@ -267,10 +333,58 @@ end sub
 
 sub OnSharedMemoryVariableChanged(map As SharedMemory, mapKey As String)
 
-	DisplayValue()
+	' Ignorer les éventuels événements en attente d'une ancienne clé.
+	if IsWatchedKey(mapKey) then
+		DisplayValue()
+	end if
 
 end sub
 
+
+
+' ---------------------------------------------------------------------
+' CONSTRUCTION ET SYNCHRONISATION DES CLÉS SHARED MEMORY
+' ---------------------------------------------------------------------
+
+Function BuildDataKey(sPrefix as String, sId as String) as String
+
+	BuildDataKey = ""
+	if sId <> "" then
+		BuildDataKey = sPrefix & sId
+	end if
+
+End Function
+
+
+Function SyncWatchedKey(sOldKey as String, sNewKey as String) as String
+
+	SyncWatchedKey = sNewKey
+
+	if sOldKey <> sNewKey then
+		if sOldKey <> "" then
+			VizCommunication.Map.UnRegisterChangedCallback(sOldKey)
+		end if
+		if sNewKey <> "" then
+			VizCommunication.Map.RegisterChangedCallback(sNewKey)
+		end if
+	end if
+
+End Function
+
+
+Function IsWatchedKey(sKey as String) as Boolean
+
+	IsWatchedKey = false
+
+	if sKey = "" then
+		exit function
+	end if
+
+	if sKey = sKeyPrices or sKey = sKeyNotation or sKey = sKeyInstrument or sKey = sKeyMarket or sKey = sKeyValueUnit or sKey = sKeyCurrency then
+		IsWatchedKey = true
+	end if
+
+End Function
 
 ' ---------------------------------------------------------------------
 ' CONSTRUCTION DU MENU
@@ -365,6 +479,17 @@ sub BuildFieldList()
 end sub
 
 
+sub BuildNotationSourceList()
+
+	ANotationSourceLabels.Clear
+	ANotationSourceLabels.Push("Container")
+	ANotationSourceLabels.Push("Parameter")
+	ANotationSourceLabels.Push("Parent Container Geometry")
+	ANotationSourceLabels.Push("Grand Parent Container Geometry")
+
+end sub
+
+
 sub BuildFormatList()
 
 	AFormatLabels.Clear
@@ -382,7 +507,7 @@ sub BuildOutputList()
 
 	AOutputLabels.Clear
 
-	AOutputLabels.Push("geometry text")
+	AOutputLabels.Push("text / image")
 	AOutputLabels.Push("advanced counter")
 	AOutputLabels.Push("Omo")
 	AOutputLabels.Push("active")
@@ -448,58 +573,36 @@ End Sub
 
 Sub RegisterNewNotation()
 
-	' On désenregistre les callbacks de l'ancienne notation_id.
-	if sNotationEnCours <> "" then
-		if AsNotation.size > 0 then
-			VizCommunication.Map.UnRegisterChangedCallback("HBF_instrument_" & AsNotation[4][0])
-		end if
-		VizCommunication.Map.UnRegisterChangedCallback("HBF_prices_get_" & sNotationEnCours)
-		VizCommunication.Map.UnRegisterChangedCallback("HBF_notation_"    & sNotationEnCours)
-	end if
+	' Lire uniquement la source explicitement sélectionnée.
+	sNotationEnCours = ""
 
-
-	' ---------------------------------------------------------
-	' Méthode 1 : container texte prioritaire si renseigné
-	' ---------------------------------------------------------
-
-	if bUseNotationContainer then
-
-		if gNotation_id <> null then
-			sNotationEnCours = gNotation_id.text
-			sNotationEnCours.Trim()
-		else
-			sNotationEnCours = ""
-		end if
-
-
-	' ---------------------------------------------------------
-	' Méthode 2 : paramètre String par défaut
-	' ---------------------------------------------------------
-
-	else
-
+	if GetParameterInt("notation_id_source") = 1 then
 		sNotationEnCours = GetParameterString("IdNotation")
-		sNotationEnCours.Trim()
-
+	elseif bUseNotationContainer then
+		if gNotation_id <> null then
+			if gNotation_id.Valid then
+				sNotationEnCours = gNotation_id.text
+			end if
+		end if
 	end if
 
+	sNotationEnCours.Trim()
 
-	' On enregistre les callbacks de la nouvelle notation_id.
-	if sNotationEnCours <> "" then
-		VizCommunication.Map.RegisterChangedCallback("HBF_prices_get_" & sNotationEnCours)
-		VizCommunication.Map.RegisterChangedCallback("HBF_notation_"    & sNotationEnCours)
-	end if
-
+	' DisplayValue compare les anciennes et nouvelles clés avant toute inscription.
 	DisplayValue()
 
 End Sub
-
 
 ' ---------------------------------------------------------------------
 ' RÉCUPÉRATION DES DONNÉES
 ' ---------------------------------------------------------------------
 
 Sub DisplayValue()
+
+	dim sValueUnitId as String
+	dim sCurrencyId as String
+	dim sMarketId as String
+	dim sInstrumentId as String
 
 	AsPricesGet.Clear
 	AsNotation.Clear
@@ -508,62 +611,59 @@ Sub DisplayValue()
 	AsValueUnit.Clear
 	AsCurrency.Clear
 
-	' Si aucune notation_id valide n'est définie,
-	' on vide simplement la sortie.
-	if sNotationEnCours = "" then
-		OutputSelectedValue()
-		exit sub
+	' Les clés primaires sont surveillées avant la lecture des données.
+	sKeyPrices = SyncWatchedKey(sKeyPrices, BuildDataKey("HBF_prices_get_", sNotationEnCours))
+	sKeyNotation = SyncWatchedKey(sKeyNotation, BuildDataKey("HBF_notation_", sNotationEnCours))
+
+	if sKeyPrices <> "" then
+		AsPricesGet = (array[array[string]]) VizCommunication.Map[sKeyPrices]
+	end if
+	if sKeyNotation <> "" then
+		AsNotation = (array[array[string]]) VizCommunication.Map[sKeyNotation]
 	end if
 
-
-	' Récupération PricesGet et Notation
-
-	AsPricesGet  = (array[array[string]]) VizCommunication.Map["HBF_prices_get_" & sNotationEnCours]
-	AsNotation   = (array[array[string]]) VizCommunication.Map["HBF_notation_"   & sNotationEnCours]
-
-
-	' Récupération ValueUnit / Currency / Market
-
+	' Conserver le choix des sources d'origine, mais protéger chaque cellule.
 	if AsPricesGet.size > 0 then
-
-		AsValueUnit = (array[array[string]]) VizCommunication.Map["HBF_valueUnit_" & AsPricesGet[0][0]]
-		VizCommunication.Map.RegisterChangedCallback("HBF_valueUnit_" & AsPricesGet[0][0])
-		AsCurrency  = (array[array[string]]) VizCommunication.Map["HBF_currency_"  & AsPricesGet[1][0]]
-		VizCommunication.Map.RegisterChangedCallback("HBF_currency_"  & AsPricesGet[1][0])
-		AsMarket    = (array[array[string]]) VizCommunication.Map["HBF_market_"    & AsPricesGet[2][0]]
-		VizCommunication.Map.RegisterChangedCallback("HBF_market_"    & AsPricesGet[2][0])
+		sValueUnitId = GetCell(AsPricesGet, 0, 0)
+		sCurrencyId = GetCell(AsPricesGet, 1, 0)
+		sMarketId = GetCell(AsPricesGet, 2, 0)
 	else
+		sValueUnitId = GetCell(AsNotation, 2, 0)
+		sCurrencyId = ""
+		sMarketId = GetCell(AsNotation, 3, 0)
+	end if
+	sInstrumentId = GetCell(AsNotation, 4, 0)
 
-		if AsNotation.size > 0 then
-			AsValueUnit = (array[array[string]]) VizCommunication.Map["HBF_valueUnit_" & AsNotation[2][0]]
-			VizCommunication.Map.RegisterChangedCallback("HBF_valueUnit_" & AsNotation[2][0])
-			AsMarket    = (array[array[string]]) VizCommunication.Map["HBF_market_"    & AsNotation[3][0]]
-			VizCommunication.Map.RegisterChangedCallback("HBF_market_"    & AsNotation[3][0])
-		end if
+	' Une clé inchangée ne provoque aucune réinscription.
+	' Un identifiant vide retire l'ancien abonnement et n'en crée aucun.
+	sKeyValueUnit = SyncWatchedKey(sKeyValueUnit, BuildDataKey("HBF_valueUnit_", sValueUnitId))
+	sKeyCurrency = SyncWatchedKey(sKeyCurrency, BuildDataKey("HBF_currency_", sCurrencyId))
+	sKeyMarket = SyncWatchedKey(sKeyMarket, BuildDataKey("HBF_market_", sMarketId))
+	sKeyInstrument = SyncWatchedKey(sKeyInstrument, BuildDataKey("HBF_instrument_", sInstrumentId))
 
+	if sKeyValueUnit <> "" then
+		AsValueUnit = (array[array[string]]) VizCommunication.Map[sKeyValueUnit]
+	end if
+	if sKeyCurrency <> "" then
+		AsCurrency = (array[array[string]]) VizCommunication.Map[sKeyCurrency]
+	end if
+	if sKeyMarket <> "" then
+		AsMarket = (array[array[string]]) VizCommunication.Map[sKeyMarket]
+	end if
+	if sKeyInstrument <> "" then
+		AsInstrument = (array[array[string]]) VizCommunication.Map[sKeyInstrument]
 	end if
 
-
-	' Récupération Instrument
-
-	if AsNotation.size > 0 then
-		AsInstrument = (array[array[string]]) VizCommunication.Map["HBF_instrument_" & AsNotation[4][0]]
-		VizCommunication.Map.RegisterChangedCallback("HBF_instrument_" & AsNotation[4][0])
-	end if
-
-
-	' Affichage d'une seule valeur
-
+	' Les comportements de sortie existants sont conservés.
 	OutputSelectedValue()
 
 End Sub
-
 
 ' ---------------------------------------------------------------------
 ' SORTIE UNIQUE SUR LE CONTAINER COURANT
 '
 ' output :
-' 0 = geometry text
+' 0 = text / image
 ' 1 = advanced counter
 ' 2 = Omo
 ' 3 = active
@@ -695,9 +795,9 @@ End Sub
 ' SORTIE LOGO
 '
 ' Comportement voulu :
-' - output normal (geometry text / advanced counter / Omo) :
-'     applique la texture si le fichier existe,
-'     sinon charge une texture vide avec CreateTexture("")
+' - output normal (text / image uniquement) :
+'     réutilise le logo chargé valide inchangé ; sinon recharge si le fichier existe ;
+'     fichier absent ou texture/image invalide : revient à cette texture vide
 '
 ' - output active / non active :
 '     ne touche jamais à la texture,
@@ -729,8 +829,11 @@ Sub OutputSelectedValueToLogo(iOutput as Integer)
 	end if
 
 	' Sorties normales :
-	' on applique la texture si elle existe,
-	' sinon on charge une texture vide.
+	' utiliser object$VIDE comme texture de repli ;
+	' si le fichier manque ou si le chargement est invalide, garder ce repli.
+	if iOutput <> 0 then
+		exit sub
+	end if
 	bLogoExists = Set_Logo(this, sNotationEnCours)
 
 End Sub
@@ -772,7 +875,7 @@ Sub OutputSelectedValueToAdvancedCounter()
 	sClean = NormalizeDecimalString(sRawValue)
 	dVal = (Double) sClean
 
-	sSuffix = ""
+	sSuffix = GetOutputSuffix()
 
 	iFieldFormat = GetSelectedFieldFormat()
 
@@ -782,23 +885,20 @@ Sub OutputSelectedValueToAdvancedCounter()
 	'
 	' prices.latest_performance_intraday_relative
 	'
-	' - format exact : valeur brute, pas de %
-	' - format ,00 ou ,0000 : x100 + suffixe " %"
+	' - format exact : valeur brute avec le paramètre Suffix
+	' - format ,00 ou ,0000 : x100 + paramètre Suffix
 	' ---------------------------------------------------------
 
 	if iFieldFormat = 2 then
 
 		if IsDecimalFormatSelected() then
 			dVal = dVal * 100.0
-			sSuffix = " %"
 		end if
 
 	end if
 
 
-	' Plus aucun suffixe valueUnit.editorialName.
-	' latest_price et latest_performance_intraday_absolute
-	' restent de simples valeurs numériques formatées.
+	' Le paramètre Suffix est transmis au mask Advanced_Counter.
 
 	PushNumberToCtn(this, dVal, sSuffix)
 
@@ -891,9 +991,18 @@ Function GetSelectedValue() as String
 	elseif AFieldFormat[iSelected] = 2 then
 
 		' Performance relative :
-		' garde la logique x100 + " %" uniquement pour ,00 / ,0000.
+		' garde la conversion x100 uniquement pour ,00 / ,0000.
 		sValue = FormatNumericPercentValue(sValue)
 
+	end if
+
+	' Suffixe uniquement pour les valeurs numériques aux formats ,00 / ,0000.
+	if IsDecimalFormatSelected() then
+		if AFieldFormat[iSelected] = 1 or AFieldFormat[iSelected] = 2 then
+			if IsNumericText(sValue) then
+				sValue = sValue & GetOutputSuffix()
+			end if
+		end if
 	end if
 
 	' Format texte : majuscules / minuscules.
@@ -1135,8 +1244,11 @@ End Function
 ' LOGO
 '
 ' Set_Logo :
-' - crée la texture si le fichier logo est disponible
-' - sinon charge une texture vide avec CreateTexture("")
+' - conserve le logo seulement si chemin, fichier et identités natives sont inchangés
+' - charge le fichier logo s'il existe
+' - vérifie la validité de la texture et de son image
+' - fichier absent ou chargement invalide : applique à nouveau le repli de scène
+' - si object$VIDE ou sa texture est indisponible : DeleteTexture + avertissement
 ' - ne modifie jamais this.active
 '
 ' LogoFileExists :
@@ -1181,29 +1293,144 @@ Function LogoFileExists(Id as string) as Boolean
 
 End Function
 
+Function IsUsableLogoTexture(tTexture as Texture) as Boolean
 
-Function Set_Logo(cContainer as Container, Id as string) as Boolean
+	dim imgTexture as Image
 
-	dim sPath as String
-
-	Set_Logo = false
-
-	sPath = BuildLogoPath(Id)
-
-	if sPath = "" then
-		cContainer.CreateTexture("")
+	IsUsableLogoTexture = false
+	if tTexture == null then
+		exit function
+	end if
+	if tTexture.Valid = false then
 		exit function
 	end if
 
-	if System.FileExists(sPath) then
-		cContainer.CreateTexture(sPath)
-		Set_Logo = true
-	else
-		cContainer.CreateTexture("")
+	imgTexture = tTexture.Image
+	if imgTexture == null then
+		exit function
 	end if
+	if imgTexture.Valid = false then
+		exit function
+	end if
+
+	IsUsableLogoTexture = true
 
 End Function
 
+
+Sub ApplyEmptyLogoTexture(cContainer as Container)
+
+	dim cVide as Container
+	dim tVide as Texture
+	dim tFallback as Texture
+	dim imgVide as Image
+
+	if cContainer == null then
+		exit sub
+	end if
+
+	' Réutiliser l'image déjà portée par object$VIDE, sans fichier externe.
+	' Ne jamais déplacer, effacer ou modifier la texture du container source.
+	cVide = Scene.FindContainer("object$VIDE")
+	if cVide <> null then
+		if cVide.Valid then
+			tVide = cVide.Texture
+			if IsUsableLogoTexture(tVide) then
+				imgVide = tVide.Image
+				tFallback = cContainer.CreateTexture(imgVide)
+				if IsUsableLogoTexture(tFallback) then
+					ConfigureLogoTexture(cContainer)
+					exit sub
+				end if
+			end if
+		end if
+	end if
+
+	' Sécurité ultime si le repli de scène lui-même manque ou est invalide.
+	' Ne pas conserver un ancien logo dans ce cas de configuration incorrecte.
+	cContainer.DeleteTexture()
+	Println("GetHBF : texture de repli indisponible : object$VIDE")
+
+End Sub
+
+
+Function Set_Logo(cContainer as Container, Id as string) as Boolean
+
+    dim sPath as String
+    dim tLogo as Texture
+    dim imgLogo as Image
+
+    Set_Logo = false
+    if cContainer == null then
+        exit function
+    end if
+    if cContainer.Valid = false then
+        exit function
+    end if
+
+    dim cReference as Container
+    cReference = Scene.FindContainer("object$VIDE")
+    if cReference <> null then
+        if cReference.Valid then
+            if cContainer.VizId == cReference.VizId then
+                exit function
+            end if
+        end if
+    end if
+
+    sPath = BuildLogoPath(Id)
+    if sPath = "" then
+        ResetLogoCache()
+        ApplyEmptyLogoTexture(cContainer)
+        exit function
+    end if
+
+    ' Toujours retester le fichier, même quand le logo est déjà en cache.
+    if System.FileExists(sPath) = false then
+        ResetLogoCache()
+        ApplyEmptyLogoTexture(cContainer)
+        exit function
+    end if
+
+    ' Le cache ne prouve rien sans la texture ET l'image actuellement attachées.
+    ' VizId est documenté pour Container, Texture et Image (hérité de Base).
+    if bLogoCacheLoaded then
+        if sLogoCachePath = sPath then
+            if iLogoCacheContainerId = cContainer.VizId then
+                tLogo = cContainer.Texture
+                if IsUsableLogoTexture(tLogo) then
+                    if iLogoCacheTextureId = tLogo.VizId then
+                        imgLogo = tLogo.Image
+                        if iLogoCacheImageId = imgLogo.VizId then
+                            ConfigureLogoTexture(cContainer)
+                            Set_Logo = true
+                            exit function
+                        end if
+                    end if
+                end if
+            end if
+        end if
+    end if
+
+    ResetLogoCache()
+    ' Ne jamais permettre à un chargement raté de conserver le logo précédent.
+    cContainer.DeleteTexture()
+    tLogo = cContainer.CreateTexture(sPath)
+    if IsUsableLogoTexture(tLogo) = false then
+        ApplyEmptyLogoTexture(cContainer)
+        exit function
+    end if
+
+    ConfigureLogoTexture(cContainer)
+    imgLogo = tLogo.Image
+    sLogoCachePath = sPath
+    iLogoCacheContainerId = cContainer.VizId
+    iLogoCacheTextureId = tLogo.VizId
+    iLogoCacheImageId = imgLogo.VizId
+    bLogoCacheLoaded = true
+    Set_Logo = true
+
+End Function
 
 ' ---------------------------------------------------------------------
 ' NOMBRE DE DÉCIMALES POUR ADVANCED_COUNTER
@@ -1314,6 +1541,10 @@ Function GetCell(AAsTableau as array[array[string]], i as Integer, j as Integer)
 
 	GetCell = ""
 
+	if i < 0 or j < 0 then
+		exit function
+	end if
+
 	if AAsTableau.size > i then
 		if AAsTableau[i].size > j then
 			GetCell = AAsTableau[i][j]
@@ -1321,7 +1552,6 @@ Function GetCell(AAsTableau as array[array[string]], i as Integer, j as Integer)
 	end if
 
 End Function
-
 
 ' ---------------------------------------------------------------------
 ' FORMATAGE latest_time UTC -> HEURE DE PARIS
@@ -1737,7 +1967,7 @@ Function FormatNumericPercentValue(sIn as String) as String
 
 	sPercent = "" & v
 
-	FormatNumericPercentValue = FormatNumericValue(sPercent) & " %"
+	FormatNumericPercentValue = FormatNumericValue(sPercent)
 
 End Function
 
@@ -1916,17 +2146,46 @@ Function IsDigitChar(c as String) as Boolean
 
 End Function
 
+Sub ResetLogoCache()
+
+    sLogoCachePath = ""
+    bLogoCacheLoaded = false
+    iLogoCacheContainerId = 0
+    iLogoCacheTextureId = 0
+    iLogoCacheImageId = 0
+
+End Sub
 
 
+Function GetOutputSuffix() as String
 
+	GetOutputSuffix = GetParameterString("Suffix")
 
+End Function
 
-
-
-
-
-
-
-
-
-
+Sub ConfigureLogoTexture(cContainer as Container)
+    dim tTexture as Texture
+    dim cReference as Container
+    dim sResponse as String
+    if cContainer == null then
+        exit sub
+    end if
+    if cContainer.Valid == false then
+        exit sub
+    end if
+    cReference = Scene.FindContainer("object$VIDE")
+    if cReference <> null then
+        if cReference.Valid then
+            if cContainer.VizId == cReference.VizId then
+                exit sub
+            end if
+        end if
+    end if
+    tTexture = cContainer.Texture
+    if IsUsableLogoTexture(tTexture) == false then
+        exit sub
+    end if
+    tTexture.MapType = TX_MAP_VERTEX
+    tTexture.WrapType = TX_WRAP_REPEAT
+    sResponse = System.SendCommand("#" & CStr(cContainer.VizId) & "*TEXTURE*DISPLAY_COMPONENT SET COLOR_ALPHA")
+End Sub
